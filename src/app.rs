@@ -299,7 +299,8 @@ pub fn App() -> impl IntoView {
                     // Use untracked() to access signals safely in async
                     set_selected_project.update(|val| {
                         *val = Some(ProjectInfo {
-                            id: p.id,
+                            id: project.id, // this is the local id
+                            // apiProjectId: p.id,
                             name: p.name,
                             path: p.path,
                         });

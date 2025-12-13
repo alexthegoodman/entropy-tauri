@@ -204,19 +204,30 @@ pub fn run() {
         .manage(reqwest::Client::new())
         .invoke_handler(tauri::generate_handler![list_projects, open_project_chat, log_message, get_chat_messages, send_message])
         .register_uri_scheme_protocol("asset", move |app, request| {
-            let path = request.uri().path()
-                .strip_prefix("asset://")
-                .unwrap_or_else(|| request.uri().path());
+            // let path = request.uri().path()
+            //     .strip_prefix("asset://")
+            //     .unwrap_or_else(|| request.uri().path());
+            let path = request.uri().path().trim_start_matches('/');
+
+            // println!("asset path {:?}", path);
 
             let decoded_path = match urlencoding::decode(path) {
                 Ok(p) => p.into_owned(),
                 Err(_) => {
-                    return Response::builder().status(400).body(Vec::new());
+                    return Response::builder()
+                        .status(400)
+                        .header("Access-Control-Allow-Origin", "*")
+                        .body(Vec::new())
+                        .expect("Couldn't create response");
                 }
             };
 
+            // println!("asset decoded_path {:?}", decoded_path);
+
             if let Some(asset_dir) = get_common_os_dir() {
                 let asset_path = asset_dir.join(&decoded_path);
+
+                println!("asset asset_path {:?} {:?} {:?}", asset_path, asset_path.exists(), asset_path.is_file());
 
                 if asset_path.exists() && asset_path.is_file() {
                     let mime_type = mime_guess::from_path(&asset_path).first_or_octet_stream();
@@ -224,12 +235,22 @@ pub fn run() {
 
                     Response::builder()
                         .header("Content-Type", mime_type.to_string())
+                        .header("Access-Control-Allow-Origin", "*")
                         .body(content)
+                        .expect("Couldn't create response")
                 } else {
-                    Response::builder().status(404).body(Vec::new())
+                    Response::builder()
+                        .status(404)
+                        .header("Access-Control-Allow-Origin", "*")
+                        .body(Vec::new())
+                        .expect("Couldn't create response")
                 }
             } else {
-                Response::builder().status(404).body(Vec::new())
+                Response::builder()
+                    .status(404)
+                    .header("Access-Control-Allow-Origin", "*")
+                    .body(Vec::new())
+                    .expect("Couldn't create response")
             }
         })
         .run(tauri::generate_context!())
