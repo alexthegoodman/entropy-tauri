@@ -61,7 +61,7 @@ fn list_projects() -> Result<Vec<ProjectInfo>, String> {
                         projects_info.push(ProjectInfo {
                             id: project_id.to_string(),
                             name: saved_state.project_name.clone(),
-                            path: saved_state.project_path.clone(),
+                            path: project_id.to_string().clone(),
                         });
                     },
                     Err(e) => {
