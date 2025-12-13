@@ -18,6 +18,7 @@ wgpu = { version = "27.0.1", features = ["wgsl"] }
 getrandom = { version = "0.2", features = ["js"] }
 uuid = { version = "1.8.0", features = ["v4", "js"] }
 leptos-use = { version = "0.16.3" }
+wasm-timer = "0.2.5"
 
 [workspace]
 members = ["src-tauri"]

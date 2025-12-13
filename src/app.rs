@@ -17,6 +17,8 @@ use wasm_bindgen::JsCast;
 use leptos::logging::log;
 use wasm_bindgen_futures::spawn_local as wasm_spawn_local;
 use entropy_engine::helpers::load_project::load_project;
+use leptos::web_sys;
+use std::time::{Duration, SystemTime};
 
 #[wasm_bindgen]
 extern "C" {
@@ -84,12 +86,16 @@ pub fn ProjectCanvas(
             let pipeline_arc2: Arc<Mutex<ExportPipeline>> = Arc::new(Mutex::new(ExportPipeline::new()));
             // pipeline_store.set_value(Some(pipeline_arc.clone()));
 
+                        
+
             // let resume = resume.clone();
             if let Some(project) = selected_project.get() {
                 let project_id = project.id.clone();
 
                 {
                     let mut pipeline_guard = pipeline_arc2.lock().unwrap();
+
+                    
                     #[cfg(target_arch = "wasm32")]
                     pipeline_guard
                         .initialize(
@@ -116,6 +122,31 @@ pub fn ProjectCanvas(
 
                 // resume();
             }
+
+            let mut pipeline_guard = pipeline_arc2.lock().unwrap();
+
+            let editor = pipeline_guard.export_editor.as_ref().expect("Couldn't get editor");
+            let camera = editor.camera.as_ref().expect("Couldn't get camera");
+            let gpu_resources = pipeline_guard.gpu_resources.as_ref().expect("Couldn't get gpu resources");
+            let surface = gpu_resources.surface.as_ref().expect("Couldn't get surface").clone();
+            let size = camera.viewport.window_size.clone();
+
+            let swapchain_format = wgpu::TextureFormat::Rgba8Unorm;
+            let surface_config = wgpu::SurfaceConfiguration {
+                usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+                format: swapchain_format,
+                width: size.width,
+                height: size.height,
+                present_mode: wgpu::PresentMode::Fifo,
+                alpha_mode: wgpu::CompositeAlphaMode::PreMultiplied,
+                view_formats: vec![],
+                desired_maximum_frame_latency: 2
+            };
+
+            surface.configure(&gpu_resources.device, &surface_config);
+
+
+            drop(pipeline_guard);
 
             return Some(pipeline_arc2);
         },
@@ -144,7 +175,9 @@ pub fn ProjectCanvas(
                 };
 
                 let view = output.texture.create_view(&wgpu::TextureViewDescriptor::default());
-                pipeline.render_frame(Some(&view), Date::new_0().get_time(), false);
+                // let now = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).expect("Couldn't get time");
+                let now = js_sys::Date::now();
+                pipeline.render_frame(Some(&view), now, false);
                 output.present();
             }   
         }
@@ -277,7 +310,11 @@ pub fn App() -> impl IntoView {
 
     view! {
         <main class="container">
-            <section class="inbox" class:hidden=show_chat>
+            <Show
+                when=move || { !show_chat.get() }
+                fallback=|| view! { <span>{""}</span> }
+            >
+            <section class="inbox">
                 <h2>{"Welcome, Alex"}</h2>
                 <h1>{"Inbox"}</h1>
                 <div class="inbox-inner">
@@ -473,8 +510,13 @@ pub fn App() -> impl IntoView {
                     </div>
                 </section>
             </section>
+            </Show>
 
-            <section class="chat-view" class:hidden=move || !show_chat.get()>
+            <Show
+                when=move || { show_chat.get() }
+                fallback=|| view! { <span>{""}</span> }
+            >
+            <section class="chat-view">
                 <div class="chat-pane">
                     <h3>{"Chat with "} {move || selected_project.get().map(|p| p.name).unwrap_or_default()}</h3>
                     <button on:click=move |_| set_show_chat.set(false)>{"Close Chat"}</button>
@@ -527,6 +569,7 @@ pub fn App() -> impl IntoView {
                     <ProjectCanvas selected_project={selected_project} />
                 </div>
             </section>
+            </Show>
         </main>
     }
 }
