@@ -18,6 +18,7 @@ use leptos::logging::log;
 use wasm_bindgen_futures::spawn_local as wasm_spawn_local;
 use entropy_engine::helpers::load_project::load_project;
 use leptos::web_sys;
+use entropy_engine::handlers::{handle_key_press, handle_mouse_move_on_shift};
 use std::time::{Duration, SystemTime};
 
 #[wasm_bindgen]
@@ -184,7 +185,36 @@ pub fn ProjectCanvas(
     });
 
     view! {
-        <canvas id="project-canvas" node_ref=canvas_ref />
+        <canvas 
+            id="project-canvas" 
+            node_ref=canvas_ref 
+            tabindex="0"
+            on:keydown=move |ev: web_sys::KeyboardEvent| {
+                let key = ev.key();
+                if let Some(pipeline_store_val) = pipeline_store.get() {
+                    if let Some(pipeline_arc) = pipeline_store_val.as_ref() {
+                        let mut pipeline = pipeline_arc.lock().unwrap();
+                        if let Some(editor) = pipeline.export_editor.as_mut() {
+                            handle_key_press(editor, &key, true);
+                        }
+                    }
+                }
+            }
+            on:mousemove=move |ev: web_sys::MouseEvent| {
+                if ev.shift_key() {
+                    if let Some(pipeline_store_val) = pipeline_store.get() {
+                        if let Some(pipeline_arc) = pipeline_store_val.as_ref() {
+                            let mut pipeline = pipeline_arc.lock().unwrap();
+                            if let Some(editor) = pipeline.export_editor.as_mut() {
+                                let dx = ev.movement_x() as f32;
+                                let dy = ev.movement_y() as f32;
+                                handle_mouse_move_on_shift(dx, dy, editor);
+                            }
+                        }
+                    }
+                }
+            }
+        />
     }
 }
 
