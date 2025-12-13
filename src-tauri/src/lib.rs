@@ -17,6 +17,8 @@ pub struct ProjectInfo {
 
 #[tauri::command]
 fn list_projects() -> Result<Vec<ProjectInfo>, String> {
+    println!("listing projects...");
+
     let mut projects_info = Vec::new();
 
     let projects_dir = utilities::get_projects_dir()

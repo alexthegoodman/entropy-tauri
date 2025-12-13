@@ -4,6 +4,7 @@ use phosphor_leptos::{CHAT, CHATS, GAME_CONTROLLER, HEART, Icon, IconWeight, VID
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 use leptos_reactive::{Resource, *};
+use std::ops::Deref;
 
 #[wasm_bindgen]
 extern "C" {
@@ -28,392 +29,346 @@ pub fn App() -> impl IntoView {
 
     let (selected_project, set_selected_project) = signal::<Option<ProjectInfo>>(None);
 
-    let projects_resource: Resource<(), Result<Vec<ProjectInfo>, String>> = create_resource(
-        || (),
-        |_| async move {
+    // let projects_resource: Resource<(), Result<Vec<ProjectInfo>, String>> = create_resource(
+    //     || (),
+    //     |_| async move {
+    //         println!("Invoke list_projects");
+    //         let args = serde_wasm_bindgen::to_value(&()).unwrap();
+    //         let projects_js_value = invoke("list_projects", args).await;
+    //         serde_wasm_bindgen::from_value(projects_js_value).map_err(|e| e.to_string())
+    //     },
+    // );
+
+    let projects_resource: LocalResource<std::result::Result<Vec<ProjectInfo>, String>> = LocalResource::new(
+        || async move {
+            println!("Invoke list_projects");
             let args = serde_wasm_bindgen::to_value(&()).unwrap();
             let projects_js_value = invoke("list_projects", args).await;
             serde_wasm_bindgen::from_value(projects_js_value).map_err(|e| e.to_string())
-        },
+        }
     );
 
-        let projects_view = move || {
+    view! {
 
-            projects_resource.get().map(|projects_result| {
+        <main class="container">
+            <section class="inbox" class:hidden=show_chat>
+                <h2>{"Welcome, Alex"}</h2>
+                <h1>{"Inbox"}</h1>
+                <div class="inbox-inner">
+                    <div class="inbox-item">
+                        <div class="item-icon">
+                            <Icon icon=GAME_CONTROLLER color="#AE2983" weight=IconWeight::Fill size="32px" />
+                        </div>
+                        <div class="item-meta meta-big">
+                            <div class="item-title">
+                                {"The Abyss"}
+                            </div>
 
-                match projects_result {
+                            <div class="item-type">
+                                {"Game"}
+                            </div>
 
-                    Ok(projects) => {
+                            <div class="item-date">
+                                {"12/12/25"}
+                            </div>
 
-                        if projects.is_empty() {
+                            <div class="chat-notif">
+                                <Icon icon=CHAT color="#29ae8dff" weight=IconWeight::Fill size="16px" />
+                                <span>{"Sparta says..."}</span>
+                            </div>
+                        </div>
+                    </div> // inbox-item
 
-                            view! { <p>{"No projects found."}</p> }.into_view().into_any()
+                    <div class="inbox-item">
+                        <div class="item-icon">
+                            <Icon icon=CHATS color="#adb634ff" weight=IconWeight::Fill size="32px" />
+                        </div>
 
-                        } else {
+                        <div class="item-meta meta-big">
+                            <div class="item-title">
 
-                            projects.into_iter()
-
-                                .map(|project| {
-
-                                    let current_project = project.clone();
-
-                                    view! {
-
-                                        <div class="inbox-item" on:click=move |_| {
-
-                                            set_selected_project.set(Some(current_project.clone()));
-
-                                            set_show_chat.set(true);
-
-                                        }>
-
-                                            <div class="item-icon">
-
-                                                <Icon icon=GAME_CONTROLLER color="#AE2983" weight=IconWeight::Fill size="32px" />
-
-                                            </div>
-
-                                            <div class="item-meta">
-
-                                                <div class="item-title">
-
-                                                    {project.name}
-
-                                                </div>
-
-                                                <div class="item-type">
-
-                                                    {"Project"} // Hardcoded for now
-
-                                                </div>
-
-                                                <div class="item-date">
-
-                                                    {"N/A"} // No date in ProjectInfo yet
-
-                                                </div>
-
-                                            </div>
-
-                                        </div>
-
-                                    }
-
-                                })
-
-                                .collect_view().into_any()
-
-                        }
-
-                    },
-
-                    Err(e) => {
-
-                        view! { <p>{"Error loading projects: "}{e}</p> }.into_view().into_any()
-
-                    }
-
-                }
-
-            })
-
-        };
-
-    
-
-        
-
-    
-
-        view! {
-
-            <main class="container">
-
-                <section class="inbox" class:hidden=show_chat>
-
-                    <h2>{"Welcome, Alex"}</h2>
-
-                    <h1>{"Inbox"}</h1>
-
-                    <div class="inbox-inner">
-
-                        <div class="inbox-item">
-
-                            <div class="item-icon">
-
-                                <Icon icon=GAME_CONTROLLER color="#AE2983" weight=IconWeight::Fill size="32px" />
+                                {"What is the future of rendering?"}
 
                             </div>
 
-                            <div class="item-meta meta-big">
+                            <div class="item-type">
 
-                                <div class="item-title">
-
-                                    {"The Abyss"}
-
-                                </div>
-
-                                <div class="item-type">
-
-                                    {"Game"}
-
-                                </div>
-
-                                <div class="item-date">
-
-                                    {"12/12/25"}
-
-                                </div>
-
-                                <div class="chat-notif">
-
-                                    <Icon icon=CHAT color="#29ae8dff" weight=IconWeight::Fill size="16px" />
-
-                                    <span>{"Sparta says..."}</span>
-
-                                </div>
+                                {"Room"}
 
                             </div>
 
-                        </div> // inbox-item
+                            <div class="item-date">
 
-                        <div class="inbox-item">
-
-                            <div class="item-icon">
-
-                                <Icon icon=CHATS color="#adb634ff" weight=IconWeight::Fill size="32px" />
+                                {"12/11/25"}
 
                             </div>
 
-                            <div class="item-meta meta-big">
+                            <div class="chat-notif">
 
-                                <div class="item-title">
+                                <Icon icon=CHAT color="#29ae8dff" weight=IconWeight::Fill size="16px" />
 
-                                    {"What is the future of rendering?"}
-
-                                </div>
-
-                                <div class="item-type">
-
-                                    {"Room"}
-
-                                </div>
-
-                                <div class="item-date">
-
-                                    {"12/11/25"}
-
-                                </div>
-
-                                <div class="chat-notif">
-
-                                    <Icon icon=CHAT color="#29ae8dff" weight=IconWeight::Fill size="16px" />
-
-                                    <span>{"Tom says..."}</span>
-
-                                </div>
-
-                                </div>
-
-                        </div> // inbox-item
-
-                        <div class="inbox-item">
-
-                            <div class="item-icon">
-
-                                <Icon icon=VIDEO color="#9f37c5ff" weight=IconWeight::Fill size="32px" />
+                                <span>{"Tom says..."}</span>
 
                             </div>
 
-                            <div class="item-meta meta-big">
+                            </div>
 
-                                <div class="item-title">
+                    </div> // inbox-item
 
-                                    {"Cartoon Animation #3"}
+                    <div class="inbox-item">
 
-                                </div>
+                        <div class="item-icon">
 
-                                <div class="item-type">
+                            <Icon icon=VIDEO color="#9f37c5ff" weight=IconWeight::Fill size="32px" />
 
-                                    {"Video"}
+                        </div>
 
-                                </div>
+                        <div class="item-meta meta-big">
 
-                                <div class="item-date">
+                            <div class="item-title">
 
-                                    {"12/08/25"}
-
-                                </div>
-
-                                <div class="chat-notif">
-
-                                    <Icon icon=CHAT color="#29ae8dff" weight=IconWeight::Fill size="16px" />
-
-                                    <span>{"Aslan says..."}</span>
-
-                                </div>
+                                {"Cartoon Animation #3"}
 
                             </div>
 
-                        </div> // inbox-item
+                            <div class="item-type">
 
-                    </div>
+                                {"Video"}
 
-                    <button class="primary-btn">{"Start New Chat"}</button>
+                            </div>
 
-                    <span class="instructions">{"Chat with apps / projects or other content and add people or bots to the conversation. Optionally mark as public."}</span>
+                            <div class="item-date">
 
-                    <section class="more">
+                                {"12/08/25"}
 
-                        <div class="left">
+                            </div>
 
-                            <h3>{"Public Groups"}</h3>
+                            <div class="chat-notif">
 
-                            <div class="groups-inner">
+                                <Icon icon=CHAT color="#29ae8dff" weight=IconWeight::Fill size="16px" />
 
-                                <div class="inbox-item">
-
-                                    <div class="item-icon">
-
-                                        <Icon icon=GAME_CONTROLLER color="#AE2983" weight=IconWeight::Fill size="32px" />
-
-                                    </div>
-
-                                    <div class="item-meta">
-
-                                        <div class="item-title">
-
-                                            {"The Abyss"}
-
-                                        </div>
-
-                                        <div class="item-type">
-
-                                            {"Game"}
-
-                                        </div>
-
-                                        <div class="item-date">
-
-                                            {"12/12/25"}
-
-                                        </div>
-
-                                    </div>
-
-                                </div> // inbox-item
-
-                                <div class="inbox-item">
-
-                                    <div class="item-icon">
-
-                                        <Icon icon=CHATS color="#adb634ff" weight=IconWeight::Fill size="32px" />
-
-                                    </div>
-
-                                    <div class="item-meta">
-
-                                        <div class="item-title">
-
-                                            {"What is the future of rendering?"}
-
-                                        </div>
-
-                                        <div class="item-type">
-
-                                            {"Room"}
-
-                                        </div>
-
-                                        <div class="item-date">
-
-                                            {"12/11/25"}
-
-                                        </div>
-
-                                    </div>
-
-                                </div> // inbox-item
-
-                                <div class="inbox-item">
-
-                                    <div class="item-icon">
-
-                                        <Icon icon=VIDEO color="#9f37c5ff" weight=IconWeight::Fill size="32px" />
-
-                                    </div>
-
-                                    <div class="item-meta">
-
-                                        <div class="item-title">
-
-                                            {"Cartoon Animation #3"}
-
-                                        </div>
-
-                                        <div class="item-type">
-
-                                            {"Video"}
-
-                                        </div>
-
-                                        <div class="item-date">
-
-                                            {"12/08/25"}
-
-                                        </div>
-
-                                    </div>
-
-                                </div> // inbox-item
+                                <span>{"Aslan says..."}</span>
 
                             </div>
 
                         </div>
 
-                        <div class="right">
+                    </div> // inbox-item
 
-                            <h3>{"Your Files"}</h3>
+                </div>
 
+                <button class="primary-btn">{"Start New Chat"}</button>
+
+                <span class="instructions">{"Chat with apps / projects or other content and add people or bots to the conversation. Optionally mark as public."}</span>
+
+                <section class="more">
+
+                    <div class="left">
+
+                        <h3>{"Public Groups"}</h3>
+
+                        <div class="groups-inner">
+
+                            <div class="inbox-item">
+
+                                <div class="item-icon">
+
+                                    <Icon icon=GAME_CONTROLLER color="#AE2983" weight=IconWeight::Fill size="32px" />
+
+                                </div>
+
+                                <div class="item-meta">
+
+                                    <div class="item-title">
+
+                                        {"The Abyss"}
+
+                                    </div>
+
+                                    <div class="item-type">
+
+                                        {"Game"}
+
+                                    </div>
+
+                                    <div class="item-date">
+
+                                        {"12/12/25"}
+
+                                    </div>
+
+                                </div>
+
+                            </div> // inbox-item
+
+                            <div class="inbox-item">
+
+                                <div class="item-icon">
+
+                                    <Icon icon=CHATS color="#adb634ff" weight=IconWeight::Fill size="32px" />
+
+                                </div>
+
+                                <div class="item-meta">
+
+                                    <div class="item-title">
+
+                                        {"What is the future of rendering?"}
+
+                                    </div>
+
+                                    <div class="item-type">
+
+                                        {"Room"}
+
+                                    </div>
+
+                                    <div class="item-date">
+
+                                        {"12/11/25"}
+
+                                    </div>
+
+                                </div>
+
+                            </div> // inbox-item
+
+                            <div class="inbox-item">
+
+                                <div class="item-icon">
+
+                                    <Icon icon=VIDEO color="#9f37c5ff" weight=IconWeight::Fill size="32px" />
+
+                                </div>
+
+                                <div class="item-meta">
+
+                                    <div class="item-title">
+
+                                        {"Cartoon Animation #3"}
+
+                                    </div>
+
+                                    <div class="item-type">
+
+                                        {"Video"}
+
+                                    </div>
+
+                                    <div class="item-date">
+                                        {"12/08/25"}
+                                    </div>
+                                </div>
+                            </div> // inbox-item
+                        </div>
+                    </div>
+
+                    <div class="right">
+                        <h3>{"Your Files"}</h3>
+                        <Suspense fallback=move || {
+                            view! { <div>"Loading projects..."</div> }
+                        }>
                             <div class="files-inner">
+                                // if projects_resource.get().is_empty() {
+                                //     view! { <p>{"No projects found."}</p> }.into_view().into_any()
+                                // } else {
+                                //     projects_resource.get()
+                                //         .map(|project_items| {
+                                //             let current_project = project.clone();
 
-                                {projects_view}
+                                //             view! {
+                                //                 <div class="inbox-item" on:click=move |_| {
+                                //                     set_selected_project.set(Some(current_project.clone()));
+                                //                     set_show_chat.set(true);
+                                //                 }>
+                                //                     <div class="item-icon">
+                                //                         <Icon icon=GAME_CONTROLLER color="#AE2983" weight=IconWeight::Fill size="32px" />
+                                //                     </div>
 
+                                //                     <div class="item-meta">
+                                //                         <div class="item-title">
+                                //                             {project.name}
+                                //                         </div>
+
+                                //                         <div class="item-type">
+                                //                             {"Project"} // Hardcoded for now
+                                //                         </div>
+
+                                //                         <div class="item-date">
+                                //                             {"N/A"} // No date in ProjectInfo yet
+                                //                         </div>
+                                //                     </div>
+                                //                 </div>
+                                //             }
+
+                                //         })
+                                //         .collect_view().into_any()
+                                // }
+                                {move || {
+                                    projects_resource
+                                        .get()
+                                        .map(|project_items| {
+                                            let project_items = project_items.deref();
+
+                                            if let Ok(items) = project_items.clone() {
+                                                if items.is_empty() {
+                                                    return view! { <p>{"No projects found."}</p> }.into_view().into_any();
+                                                }
+
+                                                items
+                                                    .into_iter()
+                                                    .map(|project| {
+                                                        view! {
+                                                            <div class="inbox-item" on:click=move |_| {
+                                                                set_selected_project.set(Some(project.clone()));
+                                                                set_show_chat.set(true);
+                                                            }>
+                                                                <div class="item-icon">
+                                                                    <Icon icon=GAME_CONTROLLER color="#AE2983" weight=IconWeight::Fill size="32px" />
+                                                                </div>
+
+                                                                <div class="item-meta">
+                                                                    <div class="item-title">
+                                                                        {project.name.clone()}
+                                                                    </div>
+
+                                                                    <div class="item-type">
+                                                                        {"Project"} // Hardcoded for now
+                                                                    </div>
+
+                                                                    <div class="item-date">
+                                                                        {"N/A"} // No date in ProjectInfo yet
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        }
+                                                    })
+                                                    .collect_view().into_any()
+                                            } else {
+                                                view! { <p>{"Error."}</p> }.into_view().into_any()
+                                            }
+                                        })
+                                }}
                             </div>
-
-                        </div>
-
-                    </section>
-
-                </section>
-
-                <section class="chat-view" class:hidden=move || !show_chat.get()>
-
-                    <div class="chat-pane">
-
-                        <h3>{"Chat with "} {move || selected_project.get().map(|p| p.name).unwrap_or_default()}</h3>
-
-                        <button on:click=move |_| set_show_chat.set(false)>{"Close Chat"}</button>
-
-                        // Chat messages go here
-
+                        </Suspense>
                     </div>
-
-                    <div class="content-preview-pane">
-
-                        <h3>{"Content Preview: "} {move || selected_project.get().map(|p| p.name).unwrap_or_default()}</h3>
-
-                        <div class="canvas-placeholder">
-
-                            <p>{"[Placeholder for Project Canvas]"}</p>
-
-                        </div>
-
-                    </div>
-
                 </section>
+            </section>
 
-            </main>
+            <section class="chat-view" class:hidden=move || !show_chat.get()>
+                <div class="chat-pane">
+                    <h3>{"Chat with "} {move || selected_project.get().map(|p| p.name).unwrap_or_default()}</h3>
+                    <button on:click=move |_| set_show_chat.set(false)>{"Close Chat"}</button>
+                    // Chat messages go here
+                </div>
+                <div class="content-preview-pane">
+                    <h3>{"Content Preview: "} {move || selected_project.get().map(|p| p.name).unwrap_or_default()}</h3>
+                    <div class="canvas-placeholder">
+                        <p>{"[Placeholder for Project Canvas]"}</p>
+                    </div>
+                </div>
+            </section>
+        </main>
 
-        }
     }
+}
