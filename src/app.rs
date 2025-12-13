@@ -116,9 +116,9 @@ pub fn ProjectCanvas(
                         )
                         .await;
 
-                    // let editor = pipeline_guard.export_editor.as_mut().expect("Couldn't get editor");
+                    let editor = pipeline_guard.export_editor.as_mut().expect("Couldn't get editor");
 
-                    // place_project(editor, &project_id, saved_state);
+                    load_project(editor, &project_id).await;
                 }
 
                 // resume();

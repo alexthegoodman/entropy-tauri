@@ -6,7 +6,7 @@ use tauri::State;
 use reqwest::Client;
 use std::collections::HashMap;
 use tauri::{
-    http::{Response, ResponseBuilder},
+    http::{Response},
     AppHandle,
 };
 use std::path::PathBuf;
@@ -55,7 +55,7 @@ pub struct OpenChatResponse {
 }
 
 #[tauri::command]
-fn list_projects() -> Result<Vec<ProjectInfo>, String> {
+async fn list_projects() -> Result<Vec<ProjectInfo>, String> {
     println!("listing projects...");
 
     let mut projects_info = Vec::new();
@@ -69,7 +69,7 @@ fn list_projects() -> Result<Vec<ProjectInfo>, String> {
 
         if path.is_dir() {
             if let Some(project_id) = path.file_name().and_then(|s| s.to_str()) {
-                match utilities::load_project_state(project_id) {
+                match utilities::load_project_state(project_id).await {
                     Ok(saved_state) => {
                         projects_info.push(ProjectInfo {
                             id: project_id.to_string(),
@@ -204,11 +204,14 @@ pub fn run() {
         .manage(reqwest::Client::new())
         .invoke_handler(tauri::generate_handler![list_projects, open_project_chat, log_message, get_chat_messages, send_message])
         .register_uri_scheme_protocol("asset", move |app, request| {
-            let path = request.uri().strip_prefix("asset://").unwrap();
+            let path = request.uri().path()
+                .strip_prefix("asset://")
+                .unwrap_or_else(|| request.uri().path());
+
             let decoded_path = match urlencoding::decode(path) {
                 Ok(p) => p.into_owned(),
                 Err(_) => {
-                    return ResponseBuilder::new().status(400).body(Vec::new());
+                    return Response::builder().status(400).body(Vec::new());
                 }
             };
 
@@ -219,14 +222,14 @@ pub fn run() {
                     let mime_type = mime_guess::from_path(&asset_path).first_or_octet_stream();
                     let content = fs::read(&asset_path).unwrap();
 
-                    ResponseBuilder::new()
+                    Response::builder()
                         .header("Content-Type", mime_type.to_string())
                         .body(content)
                 } else {
-                    ResponseBuilder::new().status(404).body(Vec::new())
+                    Response::builder().status(404).body(Vec::new())
                 }
             } else {
-                ResponseBuilder::new().status(404).body(Vec::new())
+                Response::builder().status(404).body(Vec::new())
             }
         })
         .run(tauri::generate_context!())
