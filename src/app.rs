@@ -3,8 +3,8 @@ use leptos::{prelude::*};
 use phosphor_leptos::{CHAT, CHATS, GAME_CONTROLLER, Icon, IconWeight, VIDEO};
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
-use leptos_reactive::Resource;
-use leptos_reactive::create_resource;
+// use leptos_reactive::Resource;
+// use leptos_reactive::create_resource;
 
 #[wasm_bindgen]
 extern "C" {
@@ -50,10 +50,11 @@ pub fn App() -> impl IntoView {
     let (message_content, set_message_content) = signal(String::new());
     let input_ref: NodeRef<leptos::html::Input> = NodeRef::new();
 
-    let projects_resource: Resource<bool, Result<Vec<ProjectInfo>, String>> = create_resource(
-        move || refetch_projects.get(),
-        move |refetch| async move {
-            if refetch {
+    // DO NOT use "create_resource" as the leptos_reactive crate is deprecated, LocalResource is the recommended way for a client-side Tauri + Leptos app
+    let projects_resource: LocalResource<Result<Vec<ProjectInfo>, String>> = LocalResource::new(
+        // move || refetch_projects.get(),
+        move || async move {
+            if refetch_projects.get() {
                 set_refetch_projects.set(false);
             }
             let args = serde_wasm_bindgen::to_value(&()).unwrap();
@@ -62,26 +63,26 @@ pub fn App() -> impl IntoView {
         },
     );
 
-    let messages_resource: Resource<(Option<String>, bool), Result<Vec<ChatMessage>, String>> =
-        create_resource(
-            move || (current_session.get().map(|s| s.id), refetch_messages.get()),
-            move |(session_id, refetch)| async move {
-                if refetch {
-                    set_refetch_messages.set(false);
+    let messages_resource: LocalResource<std::result::Result<Vec<ChatMessage>, String>> = LocalResource::new(
+        // move || (),
+        move || async move { 
+            if refetch_messages.get() {
+                set_refetch_messages.set(false);
+            }
+            let session_id = current_session.get().map(|s| s.id);
+            if let Some(session_id) = session_id {
+                #[derive(Serialize)]
+                struct GetChatMessagesArgs {
+                    session_id: String,
                 }
-                if let Some(session_id) = session_id {
-                    #[derive(Serialize)]
-                    struct GetChatMessagesArgs {
-                        session_id: String,
-                    }
-                    let args = serde_wasm_bindgen::to_value(&GetChatMessagesArgs { session_id }).unwrap();
-                    let messages = invoke("get_chat_messages", args).await;
-                    serde_wasm_bindgen::from_value(messages).map_err(|e| e.to_string())
-                } else {
-                    Ok(Vec::new())
-                }
-            },
-        );
+                let args = serde_wasm_bindgen::to_value(&GetChatMessagesArgs { session_id }).unwrap();
+                let messages = invoke("get_chat_messages", args).await;
+                serde_wasm_bindgen::from_value(messages).map_err(|e| e.to_string())
+            } else {
+                Ok(Vec::new())
+            }
+        },
+    );
 
     let open_project_chat = move |project: ProjectInfo| {
         spawn_local(async move {
@@ -110,13 +111,16 @@ pub fn App() -> impl IntoView {
                     serde_wasm_bindgen::from_value(result);
                 if let Ok(res) = result {
                     let p = res.project;
-                    set_selected_project.set(Some(ProjectInfo {
-                        id: p.id,
-                        name: p.name,
-                        path: p.path,
-                    }));
-                    set_current_session.set(Some(res.session));
-                    set_show_chat.set(true);
+                    // Use untracked() to access signals safely in async
+                    set_selected_project.update_untracked(|val| {
+                        *val = Some(ProjectInfo {
+                            id: p.id,
+                            name: p.name,
+                            path: p.path,
+                        });
+                    });
+                    set_current_session.update_untracked(|val| *val = Some(res.session));
+                    set_show_chat.update_untracked(|val| *val = true);
                 }
             }
         });
@@ -124,6 +128,7 @@ pub fn App() -> impl IntoView {
 
     let send_message = move || {
         if let Some(session) = current_session.get() {
+            let content = message_content.get(); // Get value before spawn
             spawn_local(async move {
                 #[derive(Serialize)]
                 struct SendMessageArgs {
@@ -135,16 +140,18 @@ pub fn App() -> impl IntoView {
                 let args = serde_wasm_bindgen::to_value(&SendMessageArgs {
                     session_id: session.id,
                     role: "user".to_string(),
-                    content: message_content.get(),
+                    content, // Use captured value
                 })
                 .unwrap();
 
                 invoke("send_message", args).await;
-                set_message_content.set("".to_string());
-                if let Some(input) = input_ref.get() {
+                
+                // Use untracked setters
+                set_message_content.update_untracked(|val| *val = String::new());
+                if let Some(input) = input_ref.get_untracked() {
                     input.set_value("");
                 }
-                set_refetch_messages.set(true);
+                set_refetch_messages.update_untracked(|val| *val = true);
             });
         }
     };
@@ -299,7 +306,10 @@ pub fn App() -> impl IntoView {
                             <div class="files-inner">
                                 {move || {
                                     projects_resource
+                                        .get()
                                         .map(|project_items| {
+                                            let project_items = project_items.as_deref();
+                                            
                                             if let Ok(items) = project_items {
                                                 if items.is_empty() {
                                                     return view! { <p>{"No projects found."}</p> }.into_view().into_any();
@@ -354,24 +364,28 @@ pub fn App() -> impl IntoView {
                             view! { <div>"Loading messages..."</div> }
                         }>
                             {move || {
-                                messages_resource.map(|messages| {
-                                    if let Ok(messages) = messages.clone() {
-                                        view! {
-                                            <For
-                                                each=move || messages.clone()
-                                                key=|message| message.id.clone()
-                                                children=|message| {
-                                                    view! {
-                                                        <div class="chat-message">
-                                                            <strong>{message.role.clone()}:</strong>
-                                                            <span>{message.content.clone()}</span>
-                                                        </div>
-                                                    }
+                                messages_resource.get().map(|messages| {
+                                    let messages = messages.as_deref();
+
+                                    if let Ok(items) = messages {
+                                        if items.is_empty() {
+                                            return view! { <p>{"No projects found."}</p> }.into_view().into_any();
+                                        }
+
+                                        items
+                                            .into_iter()
+                                            .map(|message| {
+                                                let message = message.clone();
+                                                view! {
+                                                    <div class="chat-message">
+                                                        <strong>{message.role.clone()}:</strong>
+                                                        <span>{message.content.clone()}</span>
+                                                    </div>
                                                 }
-                                            />
-                                        }.into_view().into_any()
+                                            })
+                                            .collect_view().into_any()
                                     } else {
-                                        view! { <p>{"No messages yet."}</p> }.into_view().into_any()
+                                        view! { <p>{"Error."}</p> }.into_view().into_any()
                                     }
                                 })
                             }}
