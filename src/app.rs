@@ -1,5 +1,6 @@
 use entropy_engine::core::pipeline::ExportPipeline;
 use entropy_engine::core::editor::WindowSize;
+use entropy_engine::helpers::load_project::place_project;
 use entropy_engine::helpers::timelines::SavedTimelineStateConfig;
 use js_sys::Date;
 use leptos::html::Canvas;
@@ -15,6 +16,7 @@ use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
 use leptos::logging::log;
 use wasm_bindgen_futures::spawn_local as wasm_spawn_local;
+use entropy_engine::helpers::load_project::load_project;
 
 #[wasm_bindgen]
 extern "C" {
@@ -58,13 +60,70 @@ pub struct OpenChatResponse {
 }
 
 #[component]
-pub fn ProjectCanvas() -> impl IntoView {
+pub fn ProjectCanvas(
+    selected_project: ReadSignal<Option<ProjectInfo>>
+) -> impl IntoView {
     let canvas_ref = NodeRef::<Canvas>::new();
-    let pipeline_store = StoredValue::new(None::<Arc<Mutex<ExportPipeline>>>);
+    
+    let pipeline_store: LocalResource<Option<Arc<Mutex<ExportPipeline>>>> =
+        LocalResource::new(
+            // || (),
+        move || async move {
+            // pause();
+            
+            let canvas = canvas_ref.get();
+            if canvas.is_none() {
+                return None;
+            }
+            let canvas = canvas.expect("canvas should be loaded");
+            
+            let _ = canvas.set_attribute("width", "1024");
+            let _ = canvas.set_attribute("height", "768");
+            // let html_canvas: web_sys::HtmlCanvasElement = canvas.unchecked_into();
+
+            let pipeline_arc2: Arc<Mutex<ExportPipeline>> = Arc::new(Mutex::new(ExportPipeline::new()));
+            // pipeline_store.set_value(Some(pipeline_arc.clone()));
+
+            // let resume = resume.clone();
+            if let Some(project) = selected_project.get() {
+                let project_id = project.id.clone();
+
+                {
+                    let mut pipeline_guard = pipeline_arc2.lock().unwrap();
+                    #[cfg(target_arch = "wasm32")]
+                    pipeline_guard
+                        .initialize(
+                            Some(canvas),
+                            WindowSize {
+                                width: 1024,
+                                height: 768,
+                            },
+                            Vec::new(),
+                            SavedTimelineStateConfig {
+                                timeline_sequences: Vec::new(),
+                            },
+                            1024,
+                            768,
+                            Uuid::new_v4().to_string(),
+                            true,
+                        )
+                        .await;
+
+                    // let editor = pipeline_guard.export_editor.as_mut().expect("Couldn't get editor");
+
+                    // place_project(editor, &project_id, saved_state);
+                }
+
+                // resume();
+            }
+
+            return Some(pipeline_arc2);
+        },
+    );
 
     let Pausable { pause, resume, is_active } = use_raf_fn(move |_| {
-        pipeline_store.with_value(|pipeline| {
-            if let Some(pipeline_arc) = pipeline {
+        if let Some(pipeline) = pipeline_store.get() {
+            if let Some(pipeline_arc) = pipeline.as_ref() {
                 let mut pipeline = pipeline_arc.lock().unwrap();
                 let gpu_resources = match pipeline.gpu_resources.as_ref() {
                     Some(res) => res.clone(),
@@ -85,53 +144,10 @@ pub fn ProjectCanvas() -> impl IntoView {
                 };
 
                 let view = output.texture.create_view(&wgpu::TextureViewDescriptor::default());
-                pipeline.render_frame(Some(&view), Date::new_0().get_time(), true);
+                pipeline.render_frame(Some(&view), Date::new_0().get_time(), false);
                 output.present();
-            }
-        });
-    });
-
-    create_effect(move |_| {
-        pause();
-        let canvas = canvas_ref.get();
-        if canvas.is_none() {
-            return;
+            }   
         }
-        let canvas = canvas.expect("canvas should be loaded");
-        
-        let _ = canvas.set_attribute("width", "1024");
-        let _ = canvas.set_attribute("height", "768");
-        // let html_canvas: web_sys::HtmlCanvasElement = canvas.unchecked_into();
-
-        let pipeline_arc = Arc::new(Mutex::new(ExportPipeline::new()));
-        pipeline_store.set_value(Some(pipeline_arc.clone()));
-
-        let resume = resume.clone();
-
-        #[cfg(target_arch = "wasm32")]
-        wasm_spawn_local(async move {
-            {
-                let mut pipeline_guard = pipeline_arc.lock().unwrap();
-                pipeline_guard
-                    .initialize(
-                        Some(canvas),
-                        WindowSize {
-                            width: 1024,
-                            height: 768,
-                        },
-                        Vec::new(),
-                        SavedTimelineStateConfig {
-                            timeline_sequences: Vec::new(),
-                        },
-                        1024,
-                        768,
-                        Uuid::new_v4().to_string(),
-                        true,
-                    )
-                    .await;
-            }
-            resume();
-        });
     });
 
     view! {
@@ -508,7 +524,7 @@ pub fn App() -> impl IntoView {
                 </div>
                 <div class="content-preview-pane">
                     <h3>{"Content Preview: "} {move || selected_project.get().map(|p| p.name).unwrap_or_default()}</h3>
-                    <ProjectCanvas />
+                    <ProjectCanvas selected_project={selected_project} />
                 </div>
             </section>
         </main>
