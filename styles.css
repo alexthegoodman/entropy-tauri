@@ -178,6 +178,11 @@ button {
   gap: 2px;
 }
 
+.instructions {
+  width: 450px;
+  margin: 0 auto;
+}
+
 .primary-btn {
   background-color: #d64545;
   color: white;
@@ -202,4 +207,35 @@ button {
 
 .more .inbox-item {
   padding: 7px 15px;
+}
+
+/* Utility class to hide elements */
+.hidden {
+  display: none !important;
+}
+
+.chat-view {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  display: flex;
+  flex-direction: row;
+}
+
+.chat-pane,
+.content-preview-pane {
+  flex: 1; /* Each takes 50% of the width */
+  padding: 20px;
+  overflow-y: auto;
+  border-right: 1px solid #ccc; /* Separator */
+}
+
+.content-preview-pane {
+  border-right: none; /* No border on the last pane */
+}
+
+.chat-pane h3, .content-preview-pane h3 {
+  margin-bottom: 15px;
 }
