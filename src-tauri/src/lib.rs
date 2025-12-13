@@ -5,6 +5,13 @@ use std::{fs, path::Path};
 use tauri::State;
 use reqwest::Client;
 use std::collections::HashMap;
+use tauri::{
+    http::{Response, ResponseBuilder},
+    AppHandle,
+};
+use std::path::PathBuf;
+use mime_guess;
+use entropy_engine::helpers::utilities::get_common_os_dir;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ProjectInfo {
@@ -196,6 +203,32 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .manage(reqwest::Client::new())
         .invoke_handler(tauri::generate_handler![list_projects, open_project_chat, log_message, get_chat_messages, send_message])
+        .register_uri_scheme_protocol("asset", move |app, request| {
+            let path = request.uri().strip_prefix("asset://").unwrap();
+            let decoded_path = match urlencoding::decode(path) {
+                Ok(p) => p.into_owned(),
+                Err(_) => {
+                    return ResponseBuilder::new().status(400).body(Vec::new());
+                }
+            };
+
+            if let Some(asset_dir) = get_common_os_dir() {
+                let asset_path = asset_dir.join(&decoded_path);
+
+                if asset_path.exists() && asset_path.is_file() {
+                    let mime_type = mime_guess::from_path(&asset_path).first_or_octet_stream();
+                    let content = fs::read(&asset_path).unwrap();
+
+                    ResponseBuilder::new()
+                        .header("Content-Type", mime_type.to_string())
+                        .body(content)
+                } else {
+                    ResponseBuilder::new().status(404).body(Vec::new())
+                }
+            } else {
+                ResponseBuilder::new().status(404).body(Vec::new())
+            }
+        })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
