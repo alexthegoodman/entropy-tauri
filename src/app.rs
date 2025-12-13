@@ -1,10 +1,10 @@
 use leptos::task::spawn_local;
-use leptos::{ev::SubmitEvent, prelude::*};
-use phosphor_leptos::{CHAT, CHATS, GAME_CONTROLLER, HEART, Icon, IconWeight, VIDEO};
+use leptos::{prelude::*};
+use phosphor_leptos::{CHAT, CHATS, GAME_CONTROLLER, Icon, IconWeight, VIDEO};
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
-use leptos_reactive::{Resource, *};
-use std::ops::Deref;
+use leptos_reactive::Resource;
+use leptos_reactive::create_resource;
 
 #[wasm_bindgen]
 extern "C" {
@@ -12,44 +12,144 @@ extern "C" {
     async fn invoke(cmd: &str, args: JsValue) -> JsValue;
 }
 
-#[derive(Serialize, Deserialize)]
-struct GreetArgs<'a> {
-    name: &'a str,
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Project {
+    pub id: String,
+    pub name: String,
+    pub path: String,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ProjectInfo {
     pub id: String,
     pub name: String,
+    pub path: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ChatSession {
+    pub id: String,
+    #[serde(rename = "projectId")]
+    pub project_id: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ChatMessage {
+    pub id: String,
+    pub role: String,
+    pub content: String,
 }
 
 #[component]
 pub fn App() -> impl IntoView {
     let (show_chat, set_show_chat) = signal(false);
-
     let (selected_project, set_selected_project) = signal::<Option<ProjectInfo>>(None);
+    let (current_session, set_current_session) = signal::<Option<ChatSession>>(None);
+    let (refetch_projects, set_refetch_projects) = signal(false);
+    let (refetch_messages, set_refetch_messages) = signal(false);
+    let (message_content, set_message_content) = signal(String::new());
+    let input_ref: NodeRef<leptos::html::Input> = NodeRef::new();
 
-    // let projects_resource: Resource<(), Result<Vec<ProjectInfo>, String>> = create_resource(
-    //     || (),
-    //     |_| async move {
-    //         println!("Invoke list_projects");
-    //         let args = serde_wasm_bindgen::to_value(&()).unwrap();
-    //         let projects_js_value = invoke("list_projects", args).await;
-    //         serde_wasm_bindgen::from_value(projects_js_value).map_err(|e| e.to_string())
-    //     },
-    // );
-
-    let projects_resource: LocalResource<std::result::Result<Vec<ProjectInfo>, String>> = LocalResource::new(
-        || async move {
-            println!("Invoke list_projects");
+    let projects_resource: Resource<bool, Result<Vec<ProjectInfo>, String>> = create_resource(
+        move || refetch_projects.get(),
+        move |refetch| async move {
+            if refetch {
+                set_refetch_projects.set(false);
+            }
             let args = serde_wasm_bindgen::to_value(&()).unwrap();
             let projects_js_value = invoke("list_projects", args).await;
             serde_wasm_bindgen::from_value(projects_js_value).map_err(|e| e.to_string())
-        }
+        },
     );
 
-    view! {
+    let messages_resource: Resource<(Option<String>, bool), Result<Vec<ChatMessage>, String>> =
+        create_resource(
+            move || (current_session.get().map(|s| s.id), refetch_messages.get()),
+            move |(session_id, refetch)| async move {
+                if refetch {
+                    set_refetch_messages.set(false);
+                }
+                if let Some(session_id) = session_id {
+                    #[derive(Serialize)]
+                    struct GetChatMessagesArgs {
+                        session_id: String,
+                    }
+                    let args = serde_wasm_bindgen::to_value(&GetChatMessagesArgs { session_id }).unwrap();
+                    let messages = invoke("get_chat_messages", args).await;
+                    serde_wasm_bindgen::from_value(messages).map_err(|e| e.to_string())
+                } else {
+                    Ok(Vec::new())
+                }
+            },
+        );
 
+    let open_project_chat = move |project: ProjectInfo| {
+        spawn_local(async move {
+            #[derive(Serialize)]
+            struct OpenProjectChatArgs {
+                project_name: String,
+                project_path: String,
+            }
+
+            let args = serde_wasm_bindgen::to_value(&OpenProjectChatArgs {
+                project_name: project.name.clone(),
+                project_path: project.path.clone(),
+            })
+            .unwrap();
+
+            let result = invoke("open_project_chat", args).await;
+
+            #[derive(Deserialize)]
+            struct OpenProjectChatResult {
+                project: Project,
+                session: ChatSession,
+            }
+
+            if !result.is_null() && !result.is_undefined() {
+                let result: Result<OpenProjectChatResult, serde_wasm_bindgen::Error> =
+                    serde_wasm_bindgen::from_value(result);
+                if let Ok(res) = result {
+                    let p = res.project;
+                    set_selected_project.set(Some(ProjectInfo {
+                        id: p.id,
+                        name: p.name,
+                        path: p.path,
+                    }));
+                    set_current_session.set(Some(res.session));
+                    set_show_chat.set(true);
+                }
+            }
+        });
+    };
+
+    let send_message = move || {
+        if let Some(session) = current_session.get() {
+            spawn_local(async move {
+                #[derive(Serialize)]
+                struct SendMessageArgs {
+                    session_id: String,
+                    role: String,
+                    content: String,
+                }
+
+                let args = serde_wasm_bindgen::to_value(&SendMessageArgs {
+                    session_id: session.id,
+                    role: "user".to_string(),
+                    content: message_content.get(),
+                })
+                .unwrap();
+
+                invoke("send_message", args).await;
+                set_message_content.set("".to_string());
+                if let Some(input) = input_ref.get() {
+                    input.set_value("");
+                }
+                set_refetch_messages.set(true);
+            });
+        }
+    };
+
+    view! {
         <main class="container">
             <section class="inbox" class:hidden=show_chat>
                 <h2>{"Welcome, Alex"}</h2>
@@ -86,75 +186,48 @@ pub fn App() -> impl IntoView {
 
                         <div class="item-meta meta-big">
                             <div class="item-title">
-
                                 {"What is the future of rendering?"}
-
                             </div>
 
                             <div class="item-type">
-
                                 {"Room"}
-
                             </div>
 
                             <div class="item-date">
-
                                 {"12/11/25"}
-
                             </div>
 
                             <div class="chat-notif">
-
                                 <Icon icon=CHAT color="#29ae8dff" weight=IconWeight::Fill size="16px" />
-
                                 <span>{"Tom says..."}</span>
-
                             </div>
-
                             </div>
-
                     </div> // inbox-item
 
                     <div class="inbox-item">
-
                         <div class="item-icon">
-
                             <Icon icon=VIDEO color="#9f37c5ff" weight=IconWeight::Fill size="32px" />
-
                         </div>
 
                         <div class="item-meta meta-big">
-
                             <div class="item-title">
-
                                 {"Cartoon Animation #3"}
-
                             </div>
 
                             <div class="item-type">
-
                                 {"Video"}
-
                             </div>
 
                             <div class="item-date">
-
                                 {"12/08/25"}
-
                             </div>
 
                             <div class="chat-notif">
-
                                 <Icon icon=CHAT color="#29ae8dff" weight=IconWeight::Fill size="16px" />
-
                                 <span>{"Aslan says..."}</span>
-
                             </div>
-
                         </div>
-
                     </div> // inbox-item
-
                 </div>
 
                 <button class="primary-btn">{"Start New Chat"}</button>
@@ -162,99 +235,54 @@ pub fn App() -> impl IntoView {
                 <span class="instructions">{"Chat with apps / projects or other content and add people or bots to the conversation. Optionally mark as public."}</span>
 
                 <section class="more">
-
                     <div class="left">
-
                         <h3>{"Public Groups"}</h3>
-
                         <div class="groups-inner">
-
                             <div class="inbox-item">
-
                                 <div class="item-icon">
-
                                     <Icon icon=GAME_CONTROLLER color="#AE2983" weight=IconWeight::Fill size="32px" />
-
                                 </div>
-
                                 <div class="item-meta">
-
                                     <div class="item-title">
-
                                         {"The Abyss"}
-
                                     </div>
-
                                     <div class="item-type">
-
                                         {"Game"}
-
                                     </div>
-
                                     <div class="item-date">
-
                                         {"12/12/25"}
-
                                     </div>
-
                                 </div>
-
                             </div> // inbox-item
 
                             <div class="inbox-item">
-
                                 <div class="item-icon">
-
                                     <Icon icon=CHATS color="#adb634ff" weight=IconWeight::Fill size="32px" />
-
                                 </div>
-
                                 <div class="item-meta">
-
                                     <div class="item-title">
-
                                         {"What is the future of rendering?"}
-
                                     </div>
-
                                     <div class="item-type">
-
                                         {"Room"}
-
                                     </div>
-
                                     <div class="item-date">
-
                                         {"12/11/25"}
-
                                     </div>
-
                                 </div>
-
                             </div> // inbox-item
 
                             <div class="inbox-item">
-
                                 <div class="item-icon">
-
                                     <Icon icon=VIDEO color="#9f37c5ff" weight=IconWeight::Fill size="32px" />
-
                                 </div>
-
                                 <div class="item-meta">
-
                                     <div class="item-title">
-
                                         {"Cartoon Animation #3"}
-
                                     </div>
-
                                     <div class="item-type">
-
                                         {"Video"}
-
                                     </div>
-
                                     <div class="item-date">
                                         {"12/08/25"}
                                     </div>
@@ -269,48 +297,10 @@ pub fn App() -> impl IntoView {
                             view! { <div>"Loading projects..."</div> }
                         }>
                             <div class="files-inner">
-                                // if projects_resource.get().is_empty() {
-                                //     view! { <p>{"No projects found."}</p> }.into_view().into_any()
-                                // } else {
-                                //     projects_resource.get()
-                                //         .map(|project_items| {
-                                //             let current_project = project.clone();
-
-                                //             view! {
-                                //                 <div class="inbox-item" on:click=move |_| {
-                                //                     set_selected_project.set(Some(current_project.clone()));
-                                //                     set_show_chat.set(true);
-                                //                 }>
-                                //                     <div class="item-icon">
-                                //                         <Icon icon=GAME_CONTROLLER color="#AE2983" weight=IconWeight::Fill size="32px" />
-                                //                     </div>
-
-                                //                     <div class="item-meta">
-                                //                         <div class="item-title">
-                                //                             {project.name}
-                                //                         </div>
-
-                                //                         <div class="item-type">
-                                //                             {"Project"} // Hardcoded for now
-                                //                         </div>
-
-                                //                         <div class="item-date">
-                                //                             {"N/A"} // No date in ProjectInfo yet
-                                //                         </div>
-                                //                     </div>
-                                //                 </div>
-                                //             }
-
-                                //         })
-                                //         .collect_view().into_any()
-                                // }
                                 {move || {
                                     projects_resource
-                                        .get()
                                         .map(|project_items| {
-                                            let project_items = project_items.deref();
-
-                                            if let Ok(items) = project_items.clone() {
+                                            if let Ok(items) = project_items {
                                                 if items.is_empty() {
                                                     return view! { <p>{"No projects found."}</p> }.into_view().into_any();
                                                 }
@@ -318,10 +308,10 @@ pub fn App() -> impl IntoView {
                                                 items
                                                     .into_iter()
                                                     .map(|project| {
+                                                        let p = project.clone();
                                                         view! {
                                                             <div class="inbox-item" on:click=move |_| {
-                                                                set_selected_project.set(Some(project.clone()));
-                                                                set_show_chat.set(true);
+                                                                open_project_chat(p.clone());
                                                             }>
                                                                 <div class="item-icon">
                                                                     <Icon icon=GAME_CONTROLLER color="#AE2983" weight=IconWeight::Fill size="32px" />
@@ -359,7 +349,45 @@ pub fn App() -> impl IntoView {
                 <div class="chat-pane">
                     <h3>{"Chat with "} {move || selected_project.get().map(|p| p.name).unwrap_or_default()}</h3>
                     <button on:click=move |_| set_show_chat.set(false)>{"Close Chat"}</button>
-                    // Chat messages go here
+                    <div class="chat-messages">
+                        <Suspense fallback=move || {
+                            view! { <div>"Loading messages..."</div> }
+                        }>
+                            {move || {
+                                messages_resource.map(|messages| {
+                                    if let Ok(messages) = messages.clone() {
+                                        view! {
+                                            <For
+                                                each=move || messages.clone()
+                                                key=|message| message.id.clone()
+                                                children=|message| {
+                                                    view! {
+                                                        <div class="chat-message">
+                                                            <strong>{message.role.clone()}:</strong>
+                                                            <span>{message.content.clone()}</span>
+                                                        </div>
+                                                    }
+                                                }
+                                            />
+                                        }.into_view().into_any()
+                                    } else {
+                                        view! { <p>{"No messages yet."}</p> }.into_view().into_any()
+                                    }
+                                })
+                            }}
+                        </Suspense>
+                    </div>
+                    <div class="chat-input">
+                        <input
+                            type="text"
+                            placeholder="Type a message..."
+                            node_ref=input_ref
+                            on:input=move |ev| {
+                                set_message_content.set(event_target_value(&ev));
+                            }
+                        />
+                        <button on:click=move |_| send_message()>{"Send"}</button>
+                    </div>
                 </div>
                 <div class="content-preview-pane">
                     <h3>{"Content Preview: "} {move || selected_project.get().map(|p| p.name).unwrap_or_default()}</h3>
@@ -369,6 +397,5 @@ pub fn App() -> impl IntoView {
                 </div>
             </section>
         </main>
-
     }
 }

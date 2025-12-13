@@ -1,7 +1,7 @@
-# Tauri + Leptos
+# Entropy Chat
 
-This template should help get you started developing with Tauri and Leptos.
+## Run
 
-## Recommended IDE Setup
-
-[VS Code](https://code.visualstudio.com/) + [Tauri](https://marketplace.visualstudio.com/items?itemName=tauri-apps.tauri-vscode) + [rust-analyzer](https://marketplace.visualstudio.com/items?itemName=rust-lang.rust-analyzer).
+- Clone and Start `entropy-api`
+- Clone `entropy-engine`
+- Run `cargo tauri dev`
