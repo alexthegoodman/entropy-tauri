@@ -41,6 +41,12 @@ pub struct ChatMessage {
     pub content: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+
+pub struct OpenChatResponse {
+    project: Project, session: ChatSession
+}
+
 #[tauri::command]
 fn list_projects() -> Result<Vec<ProjectInfo>, String> {
     println!("listing projects...");
@@ -80,7 +86,9 @@ async fn open_project_chat(
     project_name: String,
     project_path: String,
     client: State<'_, Client>,
-) -> Result<(Project, ChatSession), String> {
+) -> Result<OpenChatResponse, String> {
+    println!("open_project_chat {:?} {:?}", project_name, project_path);
+
     let api_url = "http://localhost:3000";
 
     // Check if project exists
@@ -89,6 +97,8 @@ async fn open_project_chat(
         .send()
         .await
         .map_err(|e| e.to_string())?;
+
+    println!("project response {:?}", project_response.status());
 
     let project = if project_response.status().is_success() {
         project_response.json::<Project>().await.map_err(|e| e.to_string())?
@@ -112,6 +122,8 @@ async fn open_project_chat(
         }
     };
 
+    println!("open_project_chat project {:?}", project.id);
+
     // Create a new chat session
     let session_response = client
         .post(format!("{}/projects/{}/sessions", api_url, project.id))
@@ -119,9 +131,13 @@ async fn open_project_chat(
         .await
         .map_err(|e| e.to_string())?;
 
+    println!("open_project_chat session_response {:?}", session_response.status());
+
     if session_response.status().is_success() {
         let session = session_response.json::<ChatSession>().await.map_err(|e| e.to_string())?;
-        Ok((project, session))
+        Ok(OpenChatResponse {
+            project, session
+        })
     } else {
         Err(format!("Failed to create chat session: {}", session_response.text().await.unwrap_or_default()))
     }
@@ -129,6 +145,8 @@ async fn open_project_chat(
 
 #[tauri::command]
 async fn get_chat_messages(session_id: String, client: State<'_, Client>) -> Result<Vec<ChatMessage>, String> {
+    println!("get_chat_messages {:?}", session_id);
+
     let api_url = "http://localhost:3000";
     let response = client
         .get(format!("{}/sessions/{}/messages", api_url, session_id))
@@ -145,6 +163,8 @@ async fn get_chat_messages(session_id: String, client: State<'_, Client>) -> Res
 
 #[tauri::command]
 async fn send_message(session_id: String, role: String, content: String, client: State<'_, Client>) -> Result<(), String> {
+    println!("send_message {:?} {:?} {:?}", session_id, role, content);
+
     let api_url = "http://localhost:3000";
     let mut payload = HashMap::new();
     payload.insert("role", role);

@@ -3,8 +3,7 @@ use leptos::{prelude::*};
 use phosphor_leptos::{CHAT, CHATS, GAME_CONTROLLER, Icon, IconWeight, VIDEO};
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
-// use leptos_reactive::Resource;
-// use leptos_reactive::create_resource;
+use leptos::logging::log;
 
 #[wasm_bindgen]
 extern "C" {
@@ -17,6 +16,7 @@ pub struct Project {
     pub id: String,
     pub name: String,
     pub path: String,
+    pub sessions: Vec<ChatSession>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -40,6 +40,12 @@ pub struct ChatMessage {
     pub content: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+
+pub struct OpenChatResponse {
+    project: Project, session: ChatSession
+}
+
 #[component]
 pub fn App() -> impl IntoView {
     let (show_chat, set_show_chat) = signal(false);
@@ -55,7 +61,7 @@ pub fn App() -> impl IntoView {
         // move || refetch_projects.get(),
         move || async move {
             if refetch_projects.get() {
-                set_refetch_projects.set(false);
+                set_refetch_projects.update_untracked(|val| *val = false);
             }
             let args = serde_wasm_bindgen::to_value(&()).unwrap();
             let projects_js_value = invoke("list_projects", args).await;
@@ -67,11 +73,12 @@ pub fn App() -> impl IntoView {
         // move || (),
         move || async move { 
             if refetch_messages.get() {
-                set_refetch_messages.set(false);
+                set_refetch_messages.update_untracked(|val| *val = false);
             }
             let session_id = current_session.get().map(|s| s.id);
             if let Some(session_id) = session_id {
                 #[derive(Serialize)]
+                #[serde(rename_all = "camelCase")]
                 struct GetChatMessagesArgs {
                     session_id: String,
                 }
@@ -87,6 +94,7 @@ pub fn App() -> impl IntoView {
     let open_project_chat = move |project: ProjectInfo| {
         spawn_local(async move {
             #[derive(Serialize)]
+            #[serde(rename_all = "camelCase")]
             struct OpenProjectChatArgs {
                 project_name: String,
                 project_path: String,
@@ -100,28 +108,29 @@ pub fn App() -> impl IntoView {
 
             let result = invoke("open_project_chat", args).await;
 
-            #[derive(Deserialize)]
-            struct OpenProjectChatResult {
-                project: Project,
-                session: ChatSession,
-            }
-
             if !result.is_null() && !result.is_undefined() {
-                let result: Result<OpenProjectChatResult, serde_wasm_bindgen::Error> =
+                let result: Result<OpenChatResponse, serde_wasm_bindgen::Error> =
                     serde_wasm_bindgen::from_value(result);
                 if let Ok(res) = result {
                     let p = res.project;
+
+                    log!("Setting up chat {:?} {:?}", p.id, res.session.id);
+
                     // Use untracked() to access signals safely in async
-                    set_selected_project.update_untracked(|val| {
+                    set_selected_project.update(|val| {
                         *val = Some(ProjectInfo {
                             id: p.id,
                             name: p.name,
                             path: p.path,
                         });
                     });
-                    set_current_session.update_untracked(|val| *val = Some(res.session));
-                    set_show_chat.update_untracked(|val| *val = true);
+                    set_current_session.update(|val| *val = Some(res.session));
+                    set_show_chat.update(|val| *val = true);
+                } else {
+                    log!("Couldn't decode chat result 2");
                 }
+            } else {
+                log!("Couldn't decode chat result 1");
             }
         });
     };
@@ -131,6 +140,7 @@ pub fn App() -> impl IntoView {
             let content = message_content.get(); // Get value before spawn
             spawn_local(async move {
                 #[derive(Serialize)]
+                #[serde(rename_all = "camelCase")]
                 struct SendMessageArgs {
                     session_id: String,
                     role: String,
@@ -147,11 +157,11 @@ pub fn App() -> impl IntoView {
                 invoke("send_message", args).await;
                 
                 // Use untracked setters
-                set_message_content.update_untracked(|val| *val = String::new());
+                set_message_content.update(|val| *val = String::new());
                 if let Some(input) = input_ref.get_untracked() {
                     input.set_value("");
                 }
-                set_refetch_messages.update_untracked(|val| *val = true);
+                set_refetch_messages.update(|val| *val = true);
             });
         }
     };
@@ -369,7 +379,7 @@ pub fn App() -> impl IntoView {
 
                                     if let Ok(items) = messages {
                                         if items.is_empty() {
-                                            return view! { <p>{"No projects found."}</p> }.into_view().into_any();
+                                            return view! { <p>{"No messages found."}</p> }.into_view().into_any();
                                         }
 
                                         items
