@@ -112,7 +112,7 @@ pub fn ProjectCanvas(
                             1024,
                             768,
                             Uuid::new_v4().to_string(),
-                            true,
+                            false,
                         )
                         .await;
 
@@ -146,6 +146,7 @@ pub fn ProjectCanvas(
 
             surface.configure(&gpu_resources.device, &surface_config);
 
+            log!("configured surface!");
 
             drop(pipeline_guard);
 
@@ -154,7 +155,7 @@ pub fn ProjectCanvas(
     );
 
     let Pausable { pause, resume, is_active } = use_raf_fn(move |_| {
-        if let Some(pipeline) = pipeline_store.get() {
+        if let Some(pipeline) = pipeline_store.get_untracked() {
             if let Some(pipeline_arc) = pipeline.as_ref() {
                 let mut pipeline = pipeline_arc.lock().unwrap();
                 let gpu_resources = match pipeline.gpu_resources.as_ref() {
@@ -195,7 +196,11 @@ pub fn ProjectCanvas(
                     if let Some(pipeline_arc) = pipeline_store_val.as_ref() {
                         let mut pipeline = pipeline_arc.lock().unwrap();
                         if let Some(editor) = pipeline.export_editor.as_mut() {
-                            handle_key_press(editor, &key, true);
+                            let camera = editor.camera.as_ref().expect("Couldn't get camera");
+
+                            log!("handle_key_press {:?} {:?} {:?}", key, camera.position, camera.direction);
+
+                            handle_key_press(editor, key.as_str(), true);
                         }
                     }
                 }
@@ -208,6 +213,9 @@ pub fn ProjectCanvas(
                             if let Some(editor) = pipeline.export_editor.as_mut() {
                                 let dx = ev.movement_x() as f32;
                                 let dy = ev.movement_y() as f32;
+
+                                log!("handle_mouse_move_on_shift {:?} {:?}", dx, dy);
+
                                 handle_mouse_move_on_shift(dx, dy, editor);
                             }
                         }
