@@ -103,6 +103,7 @@ async fn execute_tool_call(
                 if let Some(pipeline_arc) = pipeline_arc_val.as_ref() {
                     let mut pipeline = pipeline_arc.lock().unwrap();
                     if let Some(editor) = pipeline.export_editor.as_mut() {
+                        // Update SavedState
                         if let Some(saved_state) = editor.saved_state.as_mut() {
                             if let Some(level) = saved_state.levels.as_mut().and_then(|l| l.get_mut(0)) {
                                 if let Some(components) = level.components.as_mut() {
@@ -116,6 +117,23 @@ async fn execute_tool_call(
                                         if let Some(scale) = args.scale {
                                             component.generic_properties.scale = scale;
                                         }
+                                    }
+                                }
+                            }
+                        }
+
+                        // Update RendererState
+                        if let Some(renderer_state) = editor.renderer_state.as_mut() {
+                            if let Some(model) = renderer_state.models.iter_mut().find(|m| m.id == args.component_id) {
+                                for mesh in model.meshes.iter_mut() {
+                                    if let Some(translation) = args.translation {
+                                        mesh.transform.update_position(translation);
+                                    }
+                                    if let Some(rotation) = args.rotation {
+                                        mesh.transform.update_rotation(rotation);
+                                    }
+                                    if let Some(scale) = args.scale {
+                                        mesh.transform.update_scale(scale);
                                     }
                                 }
                             }
