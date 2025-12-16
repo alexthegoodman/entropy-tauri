@@ -50,10 +50,29 @@ pub struct ChatSession {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ChatMessage {
     pub id: String,
     pub role: String,
-    pub content: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub content: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tool_call_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tool_calls: Option<Vec<ToolCall>>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ToolCall {
+    pub id: String,
+    pub r#type: String,
+    pub function: ToolCallFunction,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ToolCallFunction {
+    pub name: String,
+    pub arguments: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -62,97 +81,102 @@ pub struct OpenChatResponse {
     project: Project, session: ChatSession
 }
 
+async fn execute_tool_call(
+    tool_call: &ToolCall,
+    pipeline_store: LocalResource<Option<Arc<Mutex<ExportPipeline>>>>,
+) -> String {
+    log!("Executing tool call: {:?}", tool_call.function.name);
+
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    struct TransformObjectArgs {
+        component_id: String,
+        translation: Option<[f32; 3]>,
+        rotation: Option<[f32; 3]>,
+        scale: Option<[f32; 3]>,
+    }
+
+    if tool_call.function.name == "transformObject" {
+        let args: Result<TransformObjectArgs, _> = serde_json::from_str(&tool_call.function.arguments);
+        if let Ok(args) = args {
+            if let Some(pipeline_arc_val) = pipeline_store.get() {
+                if let Some(pipeline_arc) = pipeline_arc_val.as_ref() {
+                    let mut pipeline = pipeline_arc.lock().unwrap();
+                    if let Some(editor) = pipeline.export_editor.as_mut() {
+                        if let Some(saved_state) = editor.saved_state.as_mut() {
+                            if let Some(level) = saved_state.levels.as_mut().and_then(|l| l.get_mut(0)) {
+                                if let Some(components) = level.components.as_mut() {
+                                    if let Some(component) = components.iter_mut().find(|c| c.id == args.component_id) {
+                                        if let Some(translation) = args.translation {
+                                            component.generic_properties.position = translation;
+                                        }
+                                        if let Some(rotation) = args.rotation {
+                                            component.generic_properties.rotation = rotation;
+                                        }
+                                        if let Some(scale) = args.scale {
+                                            component.generic_properties.scale = scale;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    "{\"success\": true}".to_string()
+}
+
 #[component]
 pub fn ProjectCanvas(
-    selected_project: ReadSignal<Option<ProjectInfo>>
+    selected_project: ReadSignal<Option<ProjectInfo>>,
+    pipeline_store: LocalResource<Option<Arc<Mutex<ExportPipeline>>>>,
 ) -> impl IntoView {
     let canvas_ref = NodeRef::<Canvas>::new();
     
-    let pipeline_store: LocalResource<Option<Arc<Mutex<ExportPipeline>>>> =
-        LocalResource::new(
-            // || (),
-        move || async move {
-            // pause();
-            
-            let canvas = canvas_ref.get();
-            if canvas.is_none() {
-                return None;
-            }
-            let canvas = canvas.expect("canvas should be loaded");
-            
-            let _ = canvas.set_attribute("width", "1024");
-            let _ = canvas.set_attribute("height", "768");
-            // let html_canvas: web_sys::HtmlCanvasElement = canvas.unchecked_into();
+    create_effect(move |_| {
+        let canvas = canvas_ref.get();
+        if canvas.is_none() {
+            return;
+        }
+        let canvas = canvas.expect("canvas should be loaded");
 
-            let pipeline_arc2: Arc<Mutex<ExportPipeline>> = Arc::new(Mutex::new(ExportPipeline::new()));
-            // pipeline_store.set_value(Some(pipeline_arc.clone()));
-
+        if let Some(project) = selected_project.get() {
+            let project_id = project.id.clone();
+            if let Some(pipeline_arc) = pipeline_store.get() {
+                if let Some(pipeline_arc) = pipeline_arc.as_ref() {
+                    let pipeline_arc_clone = pipeline_arc.clone();
+                    spawn_local(async move {
+                        let mut pipeline_guard = pipeline_arc_clone.lock().unwrap();
                         
+                        #[cfg(target_arch = "wasm32")]
+                        pipeline_guard
+                            .initialize(
+                                Some(canvas),
+                                WindowSize {
+                                    width: 1024,
+                                    height: 768,
+                                },
+                                Vec::new(),
+                                SavedTimelineStateConfig {
+                                    timeline_sequences: Vec::new(),
+                                },
+                                1024,
+                                768,
+                                Uuid::new_v4().to_string(),
+                                false,
+                            )
+                            .await;
 
-            // let resume = resume.clone();
-            if let Some(project) = selected_project.get() {
-                let project_id = project.id.clone();
-
-                {
-                    let mut pipeline_guard = pipeline_arc2.lock().unwrap();
-
-                    
-                    #[cfg(target_arch = "wasm32")]
-                    pipeline_guard
-                        .initialize(
-                            Some(canvas),
-                            WindowSize {
-                                width: 1024,
-                                height: 768,
-                            },
-                            Vec::new(),
-                            SavedTimelineStateConfig {
-                                timeline_sequences: Vec::new(),
-                            },
-                            1024,
-                            768,
-                            Uuid::new_v4().to_string(),
-                            false,
-                        )
-                        .await;
-
-                    let editor = pipeline_guard.export_editor.as_mut().expect("Couldn't get editor");
-
-                    load_project(editor, &project_id).await;
+                        let editor = pipeline_guard.export_editor.as_mut().expect("Couldn't get editor");
+                        load_project(editor, &project_id).await;
+                    });
                 }
-
-                // resume();
             }
-
-            let mut pipeline_guard = pipeline_arc2.lock().unwrap();
-
-            let editor = pipeline_guard.export_editor.as_ref().expect("Couldn't get editor");
-            let camera = editor.camera.as_ref().expect("Couldn't get camera");
-            let gpu_resources = pipeline_guard.gpu_resources.as_ref().expect("Couldn't get gpu resources");
-            let surface = gpu_resources.surface.as_ref().expect("Couldn't get surface").clone();
-            let size = camera.viewport.window_size.clone();
-
-            let swapchain_format = wgpu::TextureFormat::Rgba8Unorm;
-            let surface_config = wgpu::SurfaceConfiguration {
-                usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-                format: swapchain_format,
-                width: size.width,
-                height: size.height,
-                present_mode: wgpu::PresentMode::Fifo,
-                alpha_mode: wgpu::CompositeAlphaMode::PreMultiplied,
-                view_formats: vec![],
-                desired_maximum_frame_latency: 2
-            };
-
-            surface.configure(&gpu_resources.device, &surface_config);
-
-            log!("configured surface!");
-
-            drop(pipeline_guard);
-
-            return Some(pipeline_arc2);
-        },
-    );
+        }
+    });
 
     let Pausable { pause, resume, is_active } = use_raf_fn(move |_| {
         if let Some(pipeline) = pipeline_store.get_untracked() {
@@ -177,7 +201,6 @@ pub fn ProjectCanvas(
                 };
 
                 let view = output.texture.create_view(&wgpu::TextureViewDescriptor::default());
-                // let now = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).expect("Couldn't get time");
                 let now = js_sys::Date::now();
                 pipeline.render_frame(Some(&view), now, false);
                 output.present();
@@ -234,6 +257,7 @@ pub fn App() -> impl IntoView {
     let (refetch_projects, set_refetch_projects) = signal(false);
     let (refetch_messages, set_refetch_messages) = signal(false);
     let (message_content, set_message_content) = signal(String::new());
+    let (local_messages, set_local_messages) = signal(Vec::<ChatMessage>::new());
     let input_ref: NodeRef<leptos::html::Input> = NodeRef::new();
 
     // DO NOT use "create_resource" as the leptos_reactive crate is deprecated, LocalResource is the recommended way for a client-side Tauri + Leptos app
@@ -246,6 +270,13 @@ pub fn App() -> impl IntoView {
             let args = serde_wasm_bindgen::to_value(&()).unwrap();
             let projects_js_value = invoke("list_projects", args).await;
             serde_wasm_bindgen::from_value(projects_js_value).map_err(|e| e.to_string())
+        },
+    );
+
+    let pipeline_store: LocalResource<Option<Arc<Mutex<ExportPipeline>>>> =
+        LocalResource::new(
+        move || async move {
+            Some(Arc::new(Mutex::new(ExportPipeline::new())))
         },
     );
 
@@ -270,6 +301,19 @@ pub fn App() -> impl IntoView {
             }
         },
     );
+
+    let combined_messages = Signal::derive(move || {
+        if let Some(remote) = messages_resource.get() {
+            if let Ok(remote) = remote.as_ref() {
+                let mut remote = remote.clone();
+                let local = &mut local_messages.get();
+                remote.append(local);
+                return remote;
+            }
+        }
+        
+        Vec::new()
+    });
 
     let open_project_chat = move |project: ProjectInfo| {
         spawn_local(async move {
@@ -316,9 +360,10 @@ pub fn App() -> impl IntoView {
         });
     };
 
-    let send_message = move || {
+    let send_message = move |pipeline_store: LocalResource<Option<Arc<Mutex<ExportPipeline>>>>| {
         if let Some(session) = current_session.get() {
             let content = message_content.get(); // Get value before spawn
+            set_local_messages.set(Vec::new());
             spawn_local(async move {
                 #[derive(Serialize)]
                 #[serde(rename_all = "camelCase")]
@@ -326,22 +371,51 @@ pub fn App() -> impl IntoView {
                     session_id: String,
                     role: String,
                     content: String,
+                    #[serde(skip_serializing_if = "Option::is_none")]
+                    tool_call_id: Option<String>,
                 }
 
                 let args = serde_wasm_bindgen::to_value(&SendMessageArgs {
-                    session_id: session.id,
+                    session_id: session.id.clone(),
                     role: "user".to_string(),
-                    content, // Use captured value
+                    content,
+                    tool_call_id: None,
                 })
                 .unwrap();
 
-                invoke("send_message", args).await;
-                
-                // Use untracked setters
                 set_message_content.update(|val| *val = String::new());
                 if let Some(input) = input_ref.get_untracked() {
                     input.set_value("");
                 }
+
+                let response_js_value = invoke("send_message", args).await;
+                let response: Result<ChatMessage, _> = serde_wasm_bindgen::from_value(response_js_value);
+
+                if let Ok(message) = response {
+                    if let Some(tool_calls) = message.tool_calls {
+                        set_local_messages.update(|messages| {
+                            messages.push(ChatMessage {
+                                id: Uuid::new_v4().to_string(),
+                                role: "system".to_string(),
+                                content: Some("Transforming object...".to_string()),
+                                tool_call_id: None,
+                                tool_calls: None,
+                            });
+                        });
+
+                        for tool_call in tool_calls {
+                            let result = execute_tool_call(&tool_call, pipeline_store).await;
+                            let tool_args = serde_wasm_bindgen::to_value(&SendMessageArgs {
+                                session_id: session.id.clone(),
+                                role: "tool".to_string(),
+                                content: result,
+                                tool_call_id: Some(tool_call.id),
+                            }).unwrap();
+                            invoke("send_message", tool_args).await;
+                        }
+                    }
+                }
+                
                 set_refetch_messages.update(|val| *val = true);
             });
         }
@@ -564,30 +638,18 @@ pub fn App() -> impl IntoView {
                             view! { <div>"Loading messages..."</div> }
                         }>
                             {move || {
-                                messages_resource.get().map(|messages| {
-                                    let messages = messages.as_deref();
-
-                                    if let Ok(items) = messages {
-                                        if items.is_empty() {
-                                            return view! { <p>{"No messages found."}</p> }.into_view().into_any();
+                                combined_messages.get()
+                                    .into_iter()
+                                    .map(|message| {
+                                        let message = message.clone();
+                                        view! {
+                                            <div class="chat-message">
+                                                <strong>{message.role.clone()}:</strong>
+                                                <span>{message.content.clone().unwrap_or_default()}</span>
+                                            </div>
                                         }
-
-                                        items
-                                            .into_iter()
-                                            .map(|message| {
-                                                let message = message.clone();
-                                                view! {
-                                                    <div class="chat-message">
-                                                        <strong>{message.role.clone()}:</strong>
-                                                        <span>{message.content.clone()}</span>
-                                                    </div>
-                                                }
-                                            })
-                                            .collect_view().into_any()
-                                    } else {
-                                        view! { <p>{"Error."}</p> }.into_view().into_any()
-                                    }
-                                })
+                                    })
+                                    .collect_view()
                             }}
                         </Suspense>
                     </div>
@@ -600,12 +662,12 @@ pub fn App() -> impl IntoView {
                                 set_message_content.set(event_target_value(&ev));
                             }
                         />
-                        <button on:click=move |_| send_message()>{"Send"}</button>
+                        <button on:click=move |_| send_message(pipeline_store)>{"Send"}</button>
                     </div>
                 </div>
                 <div class="content-preview-pane">
                     <h3>{"Content Preview: "} {move || selected_project.get().map(|p| p.name).unwrap_or_default()}</h3>
-                    <ProjectCanvas selected_project={selected_project} />
+                    <ProjectCanvas selected_project={selected_project} pipeline_store={pipeline_store} />
                 </div>
             </section>
             </Show>

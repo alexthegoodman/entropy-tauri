@@ -42,10 +42,16 @@ pub struct ChatSession {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ChatMessage {
     pub id: String,
     pub role: String,
-    pub content: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub content: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tool_call_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tool_calls: Option<serde_json::Value>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -169,13 +175,22 @@ async fn get_chat_messages(session_id: String, client: State<'_, Client>) -> Res
 }
 
 #[tauri::command]
-async fn send_message(session_id: String, role: String, content: String, client: State<'_, Client>) -> Result<(), String> {
-    println!("send_message {:?} {:?} {:?}", session_id, role, content);
+async fn send_message(
+    session_id: String,
+    role: String,
+    content: String,
+    tool_call_id: Option<String>,
+    client: State<'_, Client>,
+) -> Result<ChatMessage, String> {
+    println!("send_message {:?} {:?} {:?} {:?}", session_id, role, content, tool_call_id);
 
     let api_url = "http://localhost:3000";
-    let mut payload = HashMap::new();
-    payload.insert("role", role);
-    payload.insert("content", content);
+    let mut payload = HashMap::<&str, serde_json::Value>::new();
+    payload.insert("role", serde_json::to_value(role).unwrap());
+    payload.insert("content", serde_json::to_value(content).unwrap());
+    if let Some(id) = tool_call_id {
+        payload.insert("tool_call_id", serde_json::to_value(id).unwrap());
+    }
 
     let response = client
         .post(format!("{}/sessions/{}/messages", api_url, session_id))
@@ -185,7 +200,7 @@ async fn send_message(session_id: String, role: String, content: String, client:
         .map_err(|e| e.to_string())?;
 
     if response.status().is_success() {
-        Ok(())
+        response.json::<ChatMessage>().await.map_err(|e| e.to_string())
     } else {
         Err(format!("Failed to send message: {}", response.text().await.unwrap_or_default()))
     }
