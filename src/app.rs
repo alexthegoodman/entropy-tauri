@@ -10,7 +10,8 @@ use leptos_use::use_raf_fn;
 use leptos_use::utils::Pausable;
 use phosphor_leptos::{CHAT, CHATS, GAME_CONTROLLER, Icon, IconWeight, VIDEO};
 use serde::{Deserialize, Serialize};
-use std::sync::{Arc, Mutex};
+use std::rc::Rc;
+use std::cell::RefCell;
 use uuid::Uuid;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
@@ -83,7 +84,7 @@ pub struct OpenChatResponse {
 
 async fn execute_tool_call(
     tool_call: &ToolCall,
-    pipeline_store: LocalResource<Option<Arc<Mutex<ExportPipeline>>>>,
+    pipeline_store: LocalResource<Option<Rc<RefCell<ExportPipeline>>>>,
 ) -> String {
     log!("Executing tool call: {:?}", tool_call.function.name);
 
@@ -101,7 +102,7 @@ async fn execute_tool_call(
         if let Ok(args) = args {
             if let Some(pipeline_arc_val) = pipeline_store.get() {
                 if let Some(pipeline_arc) = pipeline_arc_val.as_ref() {
-                    let mut pipeline = pipeline_arc.lock().unwrap();
+                    let mut pipeline = pipeline_arc.borrow_mut();
                     if let Some(editor) = pipeline.export_editor.as_mut() {
                         // Update SavedState
                         if let Some(saved_state) = editor.saved_state.as_mut() {
@@ -150,7 +151,7 @@ async fn execute_tool_call(
 #[component]
 pub fn ProjectCanvas(
     selected_project: ReadSignal<Option<ProjectInfo>>,
-    pipeline_store: LocalResource<Option<Arc<Mutex<ExportPipeline>>>>,
+    pipeline_store: LocalResource<Option<Rc<RefCell<ExportPipeline>>>>,
 ) -> impl IntoView {
     let canvas_ref = NodeRef::<Canvas>::new();
     
@@ -167,7 +168,9 @@ pub fn ProjectCanvas(
                 if let Some(pipeline_arc) = pipeline_arc.as_ref() {
                     let pipeline_arc_clone = pipeline_arc.clone();
                     spawn_local(async move {
-                        let mut pipeline_guard = pipeline_arc_clone.lock().unwrap();
+                        let mut pipeline_guard = pipeline_arc_clone.borrow_mut();
+
+                        log!("initializing...");
                         
                         #[cfg(target_arch = "wasm32")]
                         pipeline_guard
@@ -188,8 +191,34 @@ pub fn ProjectCanvas(
                             )
                             .await;
 
+                        log!("loading project...");
+
                         let editor = pipeline_guard.export_editor.as_mut().expect("Couldn't get editor");
                         load_project(editor, &project_id).await;
+
+                        log!("configuring surface...");
+
+                        // let editor = pipeline_guard.export_editor.as_ref().expect("Couldn't get editor");
+                        // let camera = editor.camera.as_ref().expect("Couldn't get camera");
+                        // let gpu_resources = pipeline_guard.gpu_resources.as_ref().expect("Couldn't get gpu resources");
+                        // let surface = gpu_resources.surface.as_ref().expect("Couldn't get surface").clone();
+                        // let size = camera.viewport.window_size.clone();
+
+                        // let swapchain_format = wgpu::TextureFormat::Rgba8Unorm;
+                        // let surface_config = wgpu::SurfaceConfiguration {
+                        //     usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+                        //     format: swapchain_format,
+                        //     width: size.width,
+                        //     height: size.height,
+                        //     present_mode: wgpu::PresentMode::Fifo,
+                        //     alpha_mode: wgpu::CompositeAlphaMode::PreMultiplied,
+                        //     view_formats: vec![],
+                        //     desired_maximum_frame_latency: 2
+                        // };
+
+                        // surface.configure(&gpu_resources.device, &surface_config);
+
+                        // log!("Setup Complete!");
                     });
                 }
             }
@@ -199,7 +228,7 @@ pub fn ProjectCanvas(
     let Pausable { pause, resume, is_active } = use_raf_fn(move |_| {
         if let Some(pipeline) = pipeline_store.get_untracked() {
             if let Some(pipeline_arc) = pipeline.as_ref() {
-                let mut pipeline = pipeline_arc.lock().unwrap();
+                let mut pipeline = pipeline_arc.borrow_mut();
                 let gpu_resources = match pipeline.gpu_resources.as_ref() {
                     Some(res) => res.clone(),
                     None => return,
@@ -235,7 +264,7 @@ pub fn ProjectCanvas(
                 let key = ev.key();
                 if let Some(pipeline_store_val) = pipeline_store.get() {
                     if let Some(pipeline_arc) = pipeline_store_val.as_ref() {
-                        let mut pipeline = pipeline_arc.lock().unwrap();
+                        let mut pipeline = pipeline_arc.borrow_mut();
                         if let Some(editor) = pipeline.export_editor.as_mut() {
                             let camera = editor.camera.as_ref().expect("Couldn't get camera");
 
@@ -250,7 +279,7 @@ pub fn ProjectCanvas(
                 if ev.shift_key() {
                     if let Some(pipeline_store_val) = pipeline_store.get() {
                         if let Some(pipeline_arc) = pipeline_store_val.as_ref() {
-                            let mut pipeline = pipeline_arc.lock().unwrap();
+                            let mut pipeline = pipeline_arc.borrow_mut();
                             if let Some(editor) = pipeline.export_editor.as_mut() {
                                 let dx = ev.movement_x() as f32;
                                 let dy = ev.movement_y() as f32;
@@ -291,10 +320,10 @@ pub fn App() -> impl IntoView {
         },
     );
 
-    let pipeline_store: LocalResource<Option<Arc<Mutex<ExportPipeline>>>> =
+    let pipeline_store: LocalResource<Option<Rc<RefCell<ExportPipeline>>>> =
         LocalResource::new(
         move || async move {
-            Some(Arc::new(Mutex::new(ExportPipeline::new())))
+            Some(Rc::new(RefCell::new(ExportPipeline::new())))
         },
     );
 
@@ -378,7 +407,7 @@ pub fn App() -> impl IntoView {
         });
     };
 
-    let send_message = move |pipeline_store: LocalResource<Option<Arc<Mutex<ExportPipeline>>>>| {
+    let send_message = move |pipeline_store: LocalResource<Option<Rc<RefCell<ExportPipeline>>>>| {
         if let Some(session) = current_session.get() {
             let content = message_content.get(); // Get value before spawn
             set_local_messages.set(Vec::new());
