@@ -262,43 +262,51 @@ pub fn ProjectCanvas(
     });
 
     view! {
-        <canvas 
-            id="project-canvas" 
-            node_ref=canvas_ref 
-            tabindex="0"
-            on:keydown=move |ev: web_sys::KeyboardEvent| {
-                let key = ev.key();
-                if let Some(pipeline_store_val) = pipeline_store.get() {
-                    if let Some(pipeline_arc) = pipeline_store_val.as_ref() {
-                        let mut pipeline = pipeline_arc.borrow_mut();
-                        if let Some(editor) = pipeline.export_editor.as_mut() {
-                            let camera = editor.camera.as_ref().expect("Couldn't get camera");
-
-                            log!("handle_key_press {:?} {:?} {:?}", key, camera.position, camera.direction);
-
-                            handle_key_press(editor, key.as_str(), true);
-                        }
-                    }
-                }
-            }
-            on:mousemove=move |ev: web_sys::MouseEvent| {
-                if ev.shift_key() {
+        <section>
+            <Show
+                when=move || { !is_initialized.get() }
+                fallback=|| view! { <span>{""}</span> }
+            >
+                <span>{"Initializing..."}</span>
+            </Show>
+            <canvas 
+                id="project-canvas" 
+                node_ref=canvas_ref 
+                tabindex="0"
+                on:keydown=move |ev: web_sys::KeyboardEvent| {
+                    let key = ev.key();
                     if let Some(pipeline_store_val) = pipeline_store.get() {
                         if let Some(pipeline_arc) = pipeline_store_val.as_ref() {
                             let mut pipeline = pipeline_arc.borrow_mut();
                             if let Some(editor) = pipeline.export_editor.as_mut() {
-                                let dx = ev.movement_x() as f32;
-                                let dy = ev.movement_y() as f32;
+                                let camera = editor.camera.as_ref().expect("Couldn't get camera");
 
-                                log!("handle_mouse_move_on_shift {:?} {:?}", dx, dy);
+                                log!("handle_key_press {:?} {:?} {:?}", key, camera.position, camera.direction);
 
-                                handle_mouse_move_on_shift(dx, dy, editor);
+                                handle_key_press(editor, key.as_str(), true);
                             }
                         }
                     }
                 }
-            }
-        />
+                on:mousemove=move |ev: web_sys::MouseEvent| {
+                    if ev.shift_key() {
+                        if let Some(pipeline_store_val) = pipeline_store.get() {
+                            if let Some(pipeline_arc) = pipeline_store_val.as_ref() {
+                                let mut pipeline = pipeline_arc.borrow_mut();
+                                if let Some(editor) = pipeline.export_editor.as_mut() {
+                                    let dx = ev.movement_x() as f32;
+                                    let dy = ev.movement_y() as f32;
+
+                                    log!("handle_mouse_move_on_shift {:?} {:?}", dx, dy);
+
+                                    handle_mouse_move_on_shift(dx, dy, editor);
+                                }
+                            }
+                        }
+                    }
+                }
+            />
+        </section>
     }
 }
 
@@ -335,8 +343,7 @@ pub fn App() -> impl IntoView {
     );
 
     let messages_resource: LocalResource<std::result::Result<Vec<ChatMessage>, String>> = LocalResource::new(
-        // move || (),
-        move || async move { 
+    move || async move { 
             if refetch_messages.get() {
                 set_refetch_messages.update_untracked(|val| *val = false);
             }
@@ -349,25 +356,17 @@ pub fn App() -> impl IntoView {
                 }
                 let args = serde_wasm_bindgen::to_value(&GetChatMessagesArgs { session_id }).unwrap();
                 let messages = invoke("get_chat_messages", args).await;
-                serde_wasm_bindgen::from_value(messages).map_err(|e| e.to_string())
+                let mut remote: Vec<ChatMessage> = serde_wasm_bindgen::from_value(messages)
+                    .map_err(|e| e.to_string())?;
+                
+                // Combine with local messages here
+                remote.extend(local_messages.get_untracked().iter().cloned());
+                Ok(remote)
             } else {
-                Ok(Vec::new())
+                Ok(local_messages.get_untracked())
             }
         },
     );
-
-    let combined_messages = Signal::derive(move || {
-        if let Some(remote) = messages_resource.get() {
-            if let Ok(remote) = remote.as_ref() {
-                let mut remote = remote.clone();
-                let local = &mut local_messages.get();
-                remote.append(local);
-                return remote;
-            }
-        }
-        
-        Vec::new()
-    });
 
     let open_project_chat = move |project: ProjectInfo| {
         spawn_local(async move {
@@ -691,18 +690,21 @@ pub fn App() -> impl IntoView {
                             view! { <div>"Loading messages..."</div> }
                         }>
                             {move || {
-                                combined_messages.get()
-                                    .into_iter()
-                                    .map(|message| {
-                                        let message = message.clone();
-                                        view! {
-                                            <div class="chat-message">
-                                                <strong>{message.role.clone()}:</strong>
-                                                <span>{message.content.clone().unwrap_or_default()}</span>
-                                            </div>
-                                        }
+                                messages_resource.get().and_then(|result| {
+                                    result.as_ref().ok().map(|messages| {
+                                        messages
+                                            .into_iter()
+                                            .map(|message| {
+                                                view! {
+                                                    <div class="chat-message">
+                                                        <strong>{message.role.clone()}":"</strong>
+                                                        <span>{message.content.clone().unwrap_or_default()}</span>
+                                                    </div>
+                                                }
+                                            })
+                                            .collect_view()
                                     })
-                                    .collect_view()
+                                })
                             }}
                         </Suspense>
                     </div>
