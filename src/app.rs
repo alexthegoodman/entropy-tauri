@@ -152,6 +152,8 @@ async fn execute_tool_call(
 pub fn ProjectCanvas(
     selected_project: ReadSignal<Option<ProjectInfo>>,
     pipeline_store: LocalResource<Option<Rc<RefCell<ExportPipeline>>>>,
+    is_initialized: ReadSignal<bool>,
+    set_is_initialized: WriteSignal<bool>,
 ) -> impl IntoView {
     let canvas_ref = NodeRef::<Canvas>::new();
     
@@ -198,27 +200,29 @@ pub fn ProjectCanvas(
 
                         log!("configuring surface...");
 
-                        // let editor = pipeline_guard.export_editor.as_ref().expect("Couldn't get editor");
-                        // let camera = editor.camera.as_ref().expect("Couldn't get camera");
-                        // let gpu_resources = pipeline_guard.gpu_resources.as_ref().expect("Couldn't get gpu resources");
-                        // let surface = gpu_resources.surface.as_ref().expect("Couldn't get surface").clone();
-                        // let size = camera.viewport.window_size.clone();
+                        let editor = pipeline_guard.export_editor.as_ref().expect("Couldn't get editor");
+                        let camera = editor.camera.as_ref().expect("Couldn't get camera");
+                        let gpu_resources = pipeline_guard.gpu_resources.as_ref().expect("Couldn't get gpu resources");
+                        let surface = gpu_resources.surface.as_ref().expect("Couldn't get surface").clone();
+                        let size = camera.viewport.window_size.clone();
 
-                        // let swapchain_format = wgpu::TextureFormat::Rgba8Unorm;
-                        // let surface_config = wgpu::SurfaceConfiguration {
-                        //     usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-                        //     format: swapchain_format,
-                        //     width: size.width,
-                        //     height: size.height,
-                        //     present_mode: wgpu::PresentMode::Fifo,
-                        //     alpha_mode: wgpu::CompositeAlphaMode::PreMultiplied,
-                        //     view_formats: vec![],
-                        //     desired_maximum_frame_latency: 2
-                        // };
+                        let swapchain_format = wgpu::TextureFormat::Rgba8Unorm;
+                        let surface_config = wgpu::SurfaceConfiguration {
+                            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+                            format: swapchain_format,
+                            width: size.width,
+                            height: size.height,
+                            present_mode: wgpu::PresentMode::Fifo,
+                            alpha_mode: wgpu::CompositeAlphaMode::PreMultiplied,
+                            view_formats: vec![],
+                            desired_maximum_frame_latency: 2
+                        };
 
-                        // surface.configure(&gpu_resources.device, &surface_config);
+                        surface.configure(&gpu_resources.device, &surface_config);
 
-                        // log!("Setup Complete!");
+                        log!("Setup Complete!");
+
+                        set_is_initialized.set(true);
                     });
                 }
             }
@@ -226,32 +230,34 @@ pub fn ProjectCanvas(
     });
 
     let Pausable { pause, resume, is_active } = use_raf_fn(move |_| {
-        if let Some(pipeline) = pipeline_store.get_untracked() {
-            if let Some(pipeline_arc) = pipeline.as_ref() {
-                let mut pipeline = pipeline_arc.borrow_mut();
-                let gpu_resources = match pipeline.gpu_resources.as_ref() {
-                    Some(res) => res.clone(),
-                    None => return,
-                };
+        if is_initialized.get() {
+            if let Some(pipeline) = pipeline_store.get_untracked() {
+                if let Some(pipeline_arc) = pipeline.as_ref() {
+                    let mut pipeline = pipeline_arc.borrow_mut();
+                    let gpu_resources = match pipeline.gpu_resources.as_ref() {
+                        Some(res) => res.clone(),
+                        None => return,
+                    };
 
-                let surface = match gpu_resources.surface.as_ref() {
-                    Some(s) => s,
-                    None => return,
-                };
+                    let surface = match gpu_resources.surface.as_ref() {
+                        Some(s) => s,
+                        None => return,
+                    };
 
-                let output = match surface.get_current_texture() {
-                    Ok(o) => o,
-                    Err(e) => {
-                        log!("Failed to get current texture: {:?}", e);
-                        return;
-                    }
-                };
+                    let output = match surface.get_current_texture() {
+                        Ok(o) => o,
+                        Err(e) => {
+                            log!("Failed to get current texture: {:?}", e);
+                            return;
+                        }
+                    };
 
-                let view = output.texture.create_view(&wgpu::TextureViewDescriptor::default());
-                let now = js_sys::Date::now();
-                pipeline.render_frame(Some(&view), now, false);
-                output.present();
-            }   
+                    let view = output.texture.create_view(&wgpu::TextureViewDescriptor::default());
+                    let now = js_sys::Date::now();
+                    pipeline.render_frame(Some(&view), now, false);
+                    output.present();
+                }   
+            }
         }
     });
 
@@ -303,6 +309,7 @@ pub fn App() -> impl IntoView {
     let (current_session, set_current_session) = signal::<Option<ChatSession>>(None);
     let (refetch_projects, set_refetch_projects) = signal(false);
     let (refetch_messages, set_refetch_messages) = signal(false);
+    let (is_initialized, set_is_initialized) = signal(false);
     let (message_content, set_message_content) = signal(String::new());
     let (local_messages, set_local_messages) = signal(Vec::<ChatMessage>::new());
     let input_ref: NodeRef<leptos::html::Input> = NodeRef::new();
@@ -420,6 +427,7 @@ pub fn App() -> impl IntoView {
                     content: String,
                     #[serde(skip_serializing_if = "Option::is_none")]
                     tool_call_id: Option<String>,
+                    project_id: String,
                 }
 
                 let args = serde_wasm_bindgen::to_value(&SendMessageArgs {
@@ -427,6 +435,7 @@ pub fn App() -> impl IntoView {
                     role: "user".to_string(),
                     content,
                     tool_call_id: None,
+                    project_id: selected_project.get().as_ref().expect("Couldn't get selected project").id.clone()
                 })
                 .unwrap();
 
@@ -439,7 +448,11 @@ pub fn App() -> impl IntoView {
                 let response: Result<ChatMessage, _> = serde_wasm_bindgen::from_value(response_js_value);
 
                 if let Ok(message) = response {
+                    log!("Response okay");
+
                     if let Some(tool_calls) = message.tool_calls {
+                        log!("Tool calls...");
+
                         set_local_messages.update(|messages| {
                             messages.push(ChatMessage {
                                 id: Uuid::new_v4().to_string(),
@@ -452,13 +465,6 @@ pub fn App() -> impl IntoView {
 
                         for tool_call in tool_calls {
                             let result = execute_tool_call(&tool_call, pipeline_store).await;
-                            let tool_args = serde_wasm_bindgen::to_value(&SendMessageArgs {
-                                session_id: session.id.clone(),
-                                role: "tool".to_string(),
-                                content: result,
-                                tool_call_id: Some(tool_call.id),
-                            }).unwrap();
-                            invoke("send_message", tool_args).await;
                         }
                     }
                 }
@@ -714,7 +720,12 @@ pub fn App() -> impl IntoView {
                 </div>
                 <div class="content-preview-pane">
                     <h3>{"Content Preview: "} {move || selected_project.get().map(|p| p.name).unwrap_or_default()}</h3>
-                    <ProjectCanvas selected_project={selected_project} pipeline_store={pipeline_store} />
+                    <ProjectCanvas 
+                        selected_project={selected_project} 
+                        pipeline_store={pipeline_store}
+                        is_initialized={is_initialized}
+                        set_is_initialized={set_is_initialized} 
+                    />
                 </div>
             </section>
             </Show>

@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use entropy_engine::helpers::utilities;
+use entropy_engine::helpers::utilities::{self, load_project_state};
 use entropy_engine::helpers::saved_data::{self, SavedState};
 use std::{fs, path::Path};
 use tauri::State;
@@ -180,14 +180,21 @@ async fn send_message(
     role: String,
     content: String,
     tool_call_id: Option<String>,
+    project_id: String,
     client: State<'_, Client>,
 ) -> Result<ChatMessage, String> {
-    println!("send_message {:?} {:?} {:?} {:?}", session_id, role, content, tool_call_id);
+    println!("send_message {:?} {:?} {:?} {:?} {:?}", session_id, role, content, tool_call_id, project_id);
 
     let api_url = "http://localhost:3000";
     let mut payload = HashMap::<&str, serde_json::Value>::new();
     payload.insert("role", serde_json::to_value(role).unwrap());
     payload.insert("content", serde_json::to_value(content).unwrap());
+
+    let saved_state = load_project_state(&project_id).await;
+    let saved_state = saved_state.as_ref().expect("Couldn't load saved state");
+
+    payload.insert("saved_state", serde_json::to_value(saved_state).unwrap());
+
     if let Some(id) = tool_call_id {
         payload.insert("tool_call_id", serde_json::to_value(id).unwrap());
     }
