@@ -7,20 +7,20 @@ Listed below are the chat actions (tool calls / function use) which enables the 
 ## Existing Chat Actions
 
 - Transform Object (Models, Lights) (translate, scale, rotate)
+- Configure the water
 
 ## Needed Chat Actions (ready to be added to chat right away)
 
-- Configure the water + add / remove
 - Configure the grass + add / remove
 - Configure the trees + add / remove
 - Configure, add, remove point lights and directional light
 - Configure the Player Character
-- Add NPC with Chosen associated Model
-- Add Game Behaviors to NPC's
+- Add NPC behaviors to chosen Model
+- Add additional Game Behaviors to NPC's
 - Manage physics settings of Models
 - Configure game controls
 - Control camera type and configure it
-- Import Object (TBD: optionally specify LOD options)
+- Import Model (TBD: optionally specify LOD options) (TBD: use one of the premade, pre-animated models)
 - Import heightmap landscape with PBR textures (need good way of loading what can be over a dozen image files)
 
 ## Planned Chat Actions (once features are ready in engine)

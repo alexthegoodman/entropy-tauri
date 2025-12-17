@@ -115,6 +115,27 @@ async fn execute_tool_call(
         subsurface_multiplier: Option<f32>,
         fresnel_power: Option<f32>,
         fresnel_multiplier: Option<f32>,
+
+        // Wave 1 - primary wave
+        pub wave1_amplitude: Option<f32>,
+        pub wave1_frequency: Option<f32>,
+        pub wave1_speed: Option<f32>,
+        pub wave1_steepness: Option<f32>,
+        pub wave1_direction: Option<[f32; 2]>,
+
+        // Wave 2 - secondary wave
+        pub wave2_amplitude: Option<f32>,
+        pub wave2_frequency: Option<f32>,
+        pub wave2_speed: Option<f32>,
+        pub wave2_steepness: Option<f32>,
+        pub wave2_direction: Option<[f32; 2]>,
+
+        // Wave 3 - tertiary wave
+        pub wave3_amplitude: Option<f32>,
+        pub wave3_frequency: Option<f32>,
+        pub wave3_speed: Option<f32>,
+        pub wave3_steepness: Option<f32>,
+        pub wave3_direction: Option<[f32; 2]>,
     }
 
     if tool_call.function.name == "transformObject" {
@@ -218,6 +239,54 @@ async fn execute_tool_call(
                                 }
                                 if let Some(val) = args.fresnel_multiplier {
                                     current_config.fresnel_multiplier = val;
+                                }
+
+                                if let Some(val) = args.wave1_amplitude {
+                                    current_config.wave1_amplitude = val;
+                                }
+                                if let Some(val) = args.wave1_frequency {
+                                    current_config.wave1_frequency = val;
+                                }
+                                if let Some(val) = args.wave1_speed {
+                                    current_config.wave1_speed = val;
+                                }
+                                if let Some(val) = args.wave1_steepness {
+                                    current_config.wave1_steepness = val;
+                                }
+                                if let Some(val) = args.wave1_direction {
+                                    current_config.wave1_direction = val;
+                                }
+                                
+                                if let Some(val) = args.wave2_amplitude {
+                                    current_config.wave2_amplitude = val;
+                                }
+                                if let Some(val) = args.wave2_frequency {
+                                    current_config.wave2_frequency = val;
+                                }
+                                if let Some(val) = args.wave2_speed {
+                                    current_config.wave2_speed = val;
+                                }
+                                if let Some(val) = args.wave2_steepness {
+                                    current_config.wave2_steepness = val;
+                                }
+                                if let Some(val) = args.wave2_direction {
+                                    current_config.wave2_direction = val;
+                                }
+
+                                if let Some(val) = args.wave3_amplitude {
+                                    current_config.wave3_amplitude = val;
+                                }
+                                if let Some(val) = args.wave3_frequency {
+                                    current_config.wave3_frequency = val;
+                                }
+                                if let Some(val) = args.wave3_speed {
+                                    current_config.wave3_speed = val;
+                                }
+                                if let Some(val) = args.wave3_steepness {
+                                    current_config.wave3_steepness = val;
+                                }
+                                if let Some(val) = args.wave3_direction {
+                                    current_config.wave3_direction = val;
                                 }
 
                                 // water_plane.config = current_config;

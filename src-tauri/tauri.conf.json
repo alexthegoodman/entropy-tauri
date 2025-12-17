@@ -13,9 +13,9 @@
     "withGlobalTauri": true,
     "windows": [
       {
-        "title": "entropy-tauri",
-        "width": 800,
-        "height": 600
+        "title": "Entropy Chat",
+        "width": 1200,
+        "height": 900
       }
     ],
     "security": {
