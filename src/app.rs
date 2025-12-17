@@ -535,13 +535,15 @@ pub fn App() -> impl IntoView {
                         log!("Tool calls...");
 
                         set_local_messages.update(|messages| {
-                            messages.push(ChatMessage {
-                                id: Uuid::new_v4().to_string(),
-                                role: "system".to_string(),
-                                content: Some("Transforming object...".to_string()),
-                                tool_call_id: None,
-                                tool_calls: None,
-                            });
+                            for tool_call in tool_calls {
+                                messages.push(ChatMessage {
+                                    id: Uuid::new_v4().to_string(),
+                                    role: "system".to_string(),
+                                    content: Some("Implementing changes... ".to_string() + tool_call.function.name + " ".to_string() + tool_call.function.arguments),
+                                    tool_call_id: None,
+                                    tool_calls: None,
+                                });
+                            }
                         });
 
                         for tool_call in tool_calls {
