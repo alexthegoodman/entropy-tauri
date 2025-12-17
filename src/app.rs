@@ -218,7 +218,8 @@ async fn execute_tool_call(
                                     current_config.fresnel_multiplier = val;
                                 }
 
-                                water_plane.config = current_config;
+                                // water_plane.config = current_config;
+                                water_plane.update_config(&editor.gpu_resources.as_ref().expect("Couldn't get gpu resources").queue, current_config);
                             }
                         }
                     }
