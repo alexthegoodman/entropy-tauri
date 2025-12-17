@@ -1,14 +1,15 @@
 # Entropy Chat
 
-## Run
+Entropy Chat (the tauri app with Leptos on the frontend) is the WASM app for entropy-engine which allows users to create games via AI chat.
 
-- Clone and Start `entropy-api`
-- Clone `entropy-engine`
-- Run `cargo tauri dev`
+Listed below are the chat actions (tool calls / function use) which enables the workflow.
 
-## Chat Actions (ready to be added to chat right away)
+## Existing Chat Actions
 
 - Transform Object (Models, Lights) (translate, scale, rotate)
+
+## Needed Chat Actions (ready to be added to chat right away)
+
 - Configure the water + add / remove
 - Configure the grass + add / remove
 - Configure the trees + add / remove

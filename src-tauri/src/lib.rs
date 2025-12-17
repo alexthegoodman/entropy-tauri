@@ -1,6 +1,8 @@
 use serde::{Deserialize, Serialize};
 use entropy_engine::helpers::utilities::{self, load_project_state};
 use entropy_engine::helpers::saved_data::{self, SavedState};
+use entropy_engine::water_plane::config::WaterConfig;
+use entropy_engine::handlers;
 use std::{fs, path::Path};
 use tauri::State;
 use reqwest::Client;
@@ -219,12 +221,42 @@ fn log_message(message: String) {
 }
 
 
+#[tauri::command]
+async fn configure_water_plane(
+    project_id: String,
+    config: WaterConfig,
+) -> Result<(), String> {
+    println!("configure_water_plane: project_id {:?}, config {:?}", project_id, config);
+
+    let mut saved_state =
+        utilities::load_project_state(&project_id)
+            .await
+            .map_err(|e| format!("Failed to load project state: {}", e))?;
+
+    if let Some(level) = saved_state.levels.get_mut(0) {
+        // Assuming there's only one water plane and it's always the first one in the vec
+        if let Some(water_plane_data) = level.water_planes.get_mut(0) {
+            water_plane_data.config = config;
+        } else {
+            return Err("No water plane found in the project".to_string());
+        }
+    } else {
+        return Err("No level found in the project".to_string());
+    }
+
+    utilities::save_project_state(&project_id, &saved_state)
+        .await
+        .map_err(|e| format!("Failed to save project state: {}", e))?;
+
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .manage(reqwest::Client::new())
-        .invoke_handler(tauri::generate_handler![list_projects, open_project_chat, log_message, get_chat_messages, send_message])
+        .invoke_handler(tauri::generate_handler![list_projects, open_project_chat, log_message, get_chat_messages, send_message, configure_water_plane])
         .register_uri_scheme_protocol("asset", move |app, request| {
             // let path = request.uri().path()
             //     .strip_prefix("asset://")

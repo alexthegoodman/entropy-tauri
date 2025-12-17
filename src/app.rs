@@ -20,6 +20,7 @@ use wasm_bindgen_futures::spawn_local as wasm_spawn_local;
 use entropy_engine::helpers::load_project::load_project;
 use leptos::web_sys;
 use entropy_engine::handlers::{handle_key_press, handle_mouse_move_on_shift};
+use entropy_engine::water_plane::config::WaterConfig;
 use std::time::{Duration, SystemTime};
 
 #[wasm_bindgen]
@@ -97,6 +98,14 @@ async fn execute_tool_call(
         scale: Option<[f32; 3]>,
     }
 
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    struct ConfigureWaterArgs {
+        shallow_color: Option<[f32; 3]>,
+        medium_color: Option<[f32; 3]>,
+        deep_color: Option<[f32; 3]>,
+    }
+
     if tool_call.function.name == "transformObject" {
         let args: Result<TransformObjectArgs, _> = serde_json::from_str(&tool_call.function.arguments);
         if let Ok(args) = args {
@@ -137,6 +146,36 @@ async fn execute_tool_call(
                                         mesh.transform.update_scale(scale);
                                     }
                                 }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    } else if tool_call.function.name == "configureWater" {
+        log!("Configuring water plane...");
+        let args: Result<ConfigureWaterArgs, _> = serde_json::from_str(&tool_call.function.arguments);
+        if let Ok(args) = args {
+            if let Some(pipeline_arc_val) = pipeline_store.get() {
+                if let Some(pipeline_arc) = pipeline_arc_val.as_ref() {
+                    let mut pipeline = pipeline_arc.borrow_mut();
+                    if let Some(editor) = pipeline.export_editor.as_mut() {
+                        if let Some(renderer_state) = editor.renderer_state.as_mut() {
+                            if let Some(water_plane) = renderer_state.water_planes.get_mut(0) {
+                                let mut current_config = water_plane.config; // Get current config
+
+                                if let Some(color) = args.shallow_color {
+                                    current_config.shallow_color = [color[0], color[1], color[2], 1.0];
+                                }
+                                if let Some(color) = args.medium_color {
+                                    current_config.medium_color = [color[0], color[1], color[2], 1.0];
+                                }
+                                if let Some(color) = args.deep_color {
+                                    current_config.deep_color = [color[0], color[1], color[2], 1.0];
+                                }
+
+                                // Update the water plane's config and its buffer
+                                water_plane.update_config(&editor.gpu_resources.as_ref().expect("Couldn't get gpu resources").queue, current_config);
                             }
                         }
                     }
