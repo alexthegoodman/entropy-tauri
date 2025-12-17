@@ -535,12 +535,14 @@ pub fn App() -> impl IntoView {
                     if let Some(tool_calls) = message.tool_calls {
                         log!("Tool calls...");
 
+                        let tool_calls_data = tool_calls.clone();
+
                         set_local_messages.update(|messages| {
-                            for tool_call in tool_calls {
+                            for tool_call in tool_calls_data {
                                 messages.push(ChatMessage {
                                     id: Uuid::new_v4().to_string(),
                                     role: "system".to_string(),
-                                    content: Some("Implementing changes... ".to_string() + tool_call.function.name + " ".to_string() + tool_call.function.arguments),
+                                    content: Some("Implementing changes... ".to_string() + &tool_call.function.name + " " + &tool_call.function.arguments),
                                     tool_call_id: None,
                                     tool_calls: None,
                                 });

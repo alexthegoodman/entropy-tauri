@@ -233,20 +233,22 @@ async fn configure_water_plane(
             .await
             .map_err(|e| format!("Failed to load project state: {}", e))?;
 
-    if let Some(level) = saved_state.levels.get_mut(0) {
-        // Assuming there's only one water plane and it's always the first one in the vec
-        if let Some(water_plane_data) = level.water_planes.get_mut(0) {
-            water_plane_data.config = config;
-        } else {
-            return Err("No water plane found in the project".to_string());
-        }
-    } else {
-        return Err("No level found in the project".to_string());
-    }
+    let levels = saved_state.levels.as_mut().expect("Couldn't get levels");
 
-    utilities::save_project_state(&project_id, &saved_state)
-        .await
-        .map_err(|e| format!("Failed to save project state: {}", e))?;
+    // if let Some(level) = levels.get_mut(0) {
+    //     // Assuming there's only one water plane and it's always the first one in the vec
+    //     if let Some(water_plane_data) = level.water_planes.get_mut(0) {
+    //         water_plane_data.config = config;
+    //     } else {
+    //         return Err("No water plane found in the project".to_string());
+    //     }
+    // } else {
+    //     return Err("No level found in the project".to_string());
+    // }
+
+    // utilities::save_project_state(&project_id, &saved_state)
+    //     .await
+    //     .map_err(|e| format!("Failed to save project state: {}", e))?;
 
     Ok(())
 }
