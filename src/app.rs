@@ -104,6 +104,17 @@ async fn execute_tool_call(
         shallow_color: Option<[f32; 3]>,
         medium_color: Option<[f32; 3]>,
         deep_color: Option<[f32; 3]>,
+        ripple_amplitude_multiplier: Option<f32>,
+        ripple_freq: Option<f32>,
+        ripple_speed: Option<f32>,
+        shoreline_foam_range: Option<f32>,
+        crest_foam_min: Option<f32>,
+        crest_foam_max: Option<f32>,
+        sparkle_intensity: Option<f32>,
+        sparkle_threshold: Option<f32>,
+        subsurface_multiplier: Option<f32>,
+        fresnel_power: Option<f32>,
+        fresnel_multiplier: Option<f32>,
     }
 
     if tool_call.function.name == "transformObject" {
@@ -173,9 +184,41 @@ async fn execute_tool_call(
                                 if let Some(color) = args.deep_color {
                                     current_config.deep_color = [color[0], color[1], color[2], 1.0];
                                 }
+                                if let Some(val) = args.ripple_amplitude_multiplier {
+                                    current_config.ripple_amplitude_multiplier = val;
+                                }
+                                if let Some(val) = args.ripple_freq {
+                                    current_config.ripple_freq = val;
+                                }
+                                if let Some(val) = args.ripple_speed {
+                                    current_config.ripple_speed = val;
+                                }
+                                if let Some(val) = args.shoreline_foam_range {
+                                    current_config.shoreline_foam_range = val;
+                                }
+                                if let Some(val) = args.crest_foam_min {
+                                    current_config.crest_foam_min = val;
+                                }
+                                if let Some(val) = args.crest_foam_max {
+                                    current_config.crest_foam_max = val;
+                                }
+                                if let Some(val) = args.sparkle_intensity {
+                                    current_config.sparkle_intensity = val;
+                                }
+                                if let Some(val) = args.sparkle_threshold {
+                                    current_config.sparkle_threshold = val;
+                                }
+                                if let Some(val) = args.subsurface_multiplier {
+                                    current_config.subsurface_multiplier = val;
+                                }
+                                if let Some(val) = args.fresnel_power {
+                                    current_config.fresnel_power = val;
+                                }
+                                if let Some(val) = args.fresnel_multiplier {
+                                    current_config.fresnel_multiplier = val;
+                                }
 
-                                // Update the water plane's config and its buffer
-                                water_plane.update_config(&editor.gpu_resources.as_ref().expect("Couldn't get gpu resources").queue, current_config);
+                                water_plane.config = current_config;
                             }
                         }
                     }
