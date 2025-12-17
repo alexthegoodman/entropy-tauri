@@ -99,7 +99,7 @@ async fn execute_tool_call(
     }
 
     #[derive(Debug, Clone, Serialize, Deserialize)]
-    #[serde(rename_all = "camelCase")]
+    // #[serde(rename_all = "camelCase")]
     struct ConfigureWaterArgs {
         shallow_color: Option<[f32; 3]>,
         medium_color: Option<[f32; 3]>,
@@ -175,6 +175,8 @@ async fn execute_tool_call(
                             if let Some(water_plane) = renderer_state.water_planes.get_mut(0) {
                                 let mut current_config = water_plane.config; // Get current config
 
+                                log!("Configuring water plane still... {:?}", args);
+
                                 if let Some(color) = args.shallow_color {
                                     current_config.shallow_color = [color[0], color[1], color[2], 1.0];
                                 }
@@ -220,6 +222,8 @@ async fn execute_tool_call(
 
                                 // water_plane.config = current_config;
                                 water_plane.update_config(&editor.gpu_resources.as_ref().expect("Couldn't get gpu resources").queue, current_config);
+
+                                log!("Water plane configured {:?}", water_plane.config);
                             }
                         }
                     }
