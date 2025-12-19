@@ -1,5 +1,11 @@
 # Entropy Chat
 
+### Compared to MCP with other engines
+
+- Faster
+- Stable
+- Affordable
+
 ## Run
 
 - Clone and Start `entropy-api`
