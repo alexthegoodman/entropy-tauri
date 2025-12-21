@@ -258,3 +258,15 @@ button {
   width: 400px;
   border-radius: 5px;
 }
+
+.property-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.property-group {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 3px;
+}
