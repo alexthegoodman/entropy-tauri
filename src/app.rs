@@ -19,7 +19,7 @@ use leptos::logging::log;
 use wasm_bindgen_futures::spawn_local as wasm_spawn_local;
 use entropy_engine::helpers::load_project::load_project;
 use leptos::web_sys;
-use entropy_engine::handlers::{handle_key_press, handle_mouse_move_on_shift};
+use entropy_engine::handlers::{EntropyPosition, handle_key_press, handle_mouse_move, handle_mouse_move_on_shift};
 use entropy_engine::water_plane::config::WaterConfig;
 use std::time::{Duration, SystemTime};
 
@@ -445,21 +445,40 @@ pub fn ProjectCanvas(
                     }
                 }
                 on:mousemove=move |ev: web_sys::MouseEvent| {
-                    if ev.shift_key() {
+                    
                         if let Some(pipeline_store_val) = pipeline_store.get() {
                             if let Some(pipeline_arc) = pipeline_store_val.as_ref() {
                                 let mut pipeline = pipeline_arc.borrow_mut();
                                 if let Some(editor) = pipeline.export_editor.as_mut() {
+                                    let canv = canvas_ref.get();
+                                    let canv = canv.as_ref().expect("Couldn't get canvas ref");
+                                    let rect = canv.get_bounding_client_rect();
+
                                     let dx = ev.movement_x() as f32;
                                     let dy = ev.movement_y() as f32;
 
                                     log!("handle_mouse_move_on_shift {:?} {:?}", dx, dy);
 
-                                    handle_mouse_move_on_shift(dx, dy, editor);
+                                    let left_mouse_pressed = ev.button() == 0;
+                                    
+                                    handle_mouse_move(
+                                        left_mouse_pressed,
+                                        EntropyPosition {
+                                            x: ev.client_x() as f32 - rect.left() as f32,
+                                            y: ev.client_y() as f32 - rect.top() as f32,
+                                        }, 
+                                        dx, 
+                                        dy, 
+                                        editor
+                                    );
+                                    
+                                    if ev.shift_key() {
+                                        handle_mouse_move_on_shift(dx, dy, editor);
+                                    }
                                 }
                             }
                         }
-                    }
+                   
                 }
             />
         </section>
@@ -641,145 +660,14 @@ pub fn App() -> impl IntoView {
             >
             <section class="inbox">
                 <h2>{"Welcome, Alex"}</h2>
-                <h1>{"Inbox"}</h1>
-                <div class="inbox-inner">
-                    <div class="inbox-item">
-                        <div class="item-icon">
-                            <Icon icon=GAME_CONTROLLER color="#AE2983" weight=IconWeight::Fill size="32px" />
-                        </div>
-                        <div class="item-meta meta-big">
-                            <div class="item-title">
-                                {"The Abyss"}
-                            </div>
+                <h1>{"Projects"}</h1>
 
-                            <div class="item-type">
-                                {"Game"}
-                            </div>
-
-                            <div class="item-date">
-                                {"12/12/25"}
-                            </div>
-
-                            <div class="chat-notif">
-                                <Icon icon=CHAT color="#29ae8dff" weight=IconWeight::Fill size="16px" />
-                                <span>{"Sparta says..."}</span>
-                            </div>
-                        </div>
-                    </div> // inbox-item
-
-                    <div class="inbox-item">
-                        <div class="item-icon">
-                            <Icon icon=CHATS color="#adb634ff" weight=IconWeight::Fill size="32px" />
-                        </div>
-
-                        <div class="item-meta meta-big">
-                            <div class="item-title">
-                                {"What is the future of rendering?"}
-                            </div>
-
-                            <div class="item-type">
-                                {"Room"}
-                            </div>
-
-                            <div class="item-date">
-                                {"12/11/25"}
-                            </div>
-
-                            <div class="chat-notif">
-                                <Icon icon=CHAT color="#29ae8dff" weight=IconWeight::Fill size="16px" />
-                                <span>{"Tom says..."}</span>
-                            </div>
-                            </div>
-                    </div> // inbox-item
-
-                    <div class="inbox-item">
-                        <div class="item-icon">
-                            <Icon icon=VIDEO color="#9f37c5ff" weight=IconWeight::Fill size="32px" />
-                        </div>
-
-                        <div class="item-meta meta-big">
-                            <div class="item-title">
-                                {"Cartoon Animation #3"}
-                            </div>
-
-                            <div class="item-type">
-                                {"Video"}
-                            </div>
-
-                            <div class="item-date">
-                                {"12/08/25"}
-                            </div>
-
-                            <div class="chat-notif">
-                                <Icon icon=CHAT color="#29ae8dff" weight=IconWeight::Fill size="16px" />
-                                <span>{"Aslan says..."}</span>
-                            </div>
-                        </div>
-                    </div> // inbox-item
-                </div>
-
-                <button class="primary-btn">{"Start New Chat"}</button>
+                <button class="primary-btn">{"Start New Project"}</button>
 
                 <span class="instructions">{"Chat with apps / projects or other content and add people or bots to the conversation. Optionally mark as public."}</span>
 
                 <section class="more">
-                    <div class="left">
-                        <h3>{"Public Groups"}</h3>
-                        <div class="groups-inner">
-                            <div class="inbox-item">
-                                <div class="item-icon">
-                                    <Icon icon=GAME_CONTROLLER color="#AE2983" weight=IconWeight::Fill size="32px" />
-                                </div>
-                                <div class="item-meta">
-                                    <div class="item-title">
-                                        {"The Abyss"}
-                                    </div>
-                                    <div class="item-type">
-                                        {"Game"}
-                                    </div>
-                                    <div class="item-date">
-                                        {"12/12/25"}
-                                    </div>
-                                </div>
-                            </div> // inbox-item
-
-                            <div class="inbox-item">
-                                <div class="item-icon">
-                                    <Icon icon=CHATS color="#adb634ff" weight=IconWeight::Fill size="32px" />
-                                </div>
-                                <div class="item-meta">
-                                    <div class="item-title">
-                                        {"What is the future of rendering?"}
-                                    </div>
-                                    <div class="item-type">
-                                        {"Room"}
-                                    </div>
-                                    <div class="item-date">
-                                        {"12/11/25"}
-                                    </div>
-                                </div>
-                            </div> // inbox-item
-
-                            <div class="inbox-item">
-                                <div class="item-icon">
-                                    <Icon icon=VIDEO color="#9f37c5ff" weight=IconWeight::Fill size="32px" />
-                                </div>
-                                <div class="item-meta">
-                                    <div class="item-title">
-                                        {"Cartoon Animation #3"}
-                                    </div>
-                                    <div class="item-type">
-                                        {"Video"}
-                                    </div>
-                                    <div class="item-date">
-                                        {"12/08/25"}
-                                    </div>
-                                </div>
-                            </div> // inbox-item
-                        </div>
-                    </div>
-
-                    <div class="right">
+                    <div class="">
                         <h3>{"Your Files"}</h3>
                         <Suspense fallback=move || {
                             view! { <div>"Loading projects..."</div> }

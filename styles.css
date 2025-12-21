@@ -141,6 +141,7 @@ button {
   align-items: center;
   gap: 5px;
   padding: 12px;
+  margin: 0 auto;
 }
 
 .item-meta {
@@ -248,7 +249,8 @@ button {
   display: block;
   padding: 7px;
   border-radius: 5px;
-  background-color: #f6f6f6;
+  background-color: #57ddac;
+  margin: 3px 0;
 }
 
 .chat-input input {
