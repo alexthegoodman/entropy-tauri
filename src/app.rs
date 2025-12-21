@@ -437,7 +437,7 @@ pub fn ProjectCanvas(
                             if let Some(editor) = pipeline.export_editor.as_mut() {
                                 let camera = editor.camera.as_ref().expect("Couldn't get camera");
 
-                                log!("handle_key_press {:?} {:?} {:?}", key, camera.position, camera.direction);
+                                // log!("handle_key_press {:?} {:?} {:?}", key, camera.position, camera.direction);
 
                                 handle_key_press(editor, key.as_str(), true);
                             }
@@ -457,7 +457,7 @@ pub fn ProjectCanvas(
                                     let dx = ev.movement_x() as f32;
                                     let dy = ev.movement_y() as f32;
 
-                                    log!("handle_mouse_move_on_shift {:?} {:?}", dx, dy);
+                                    // log!("handle_mouse_move_on_shift {:?} {:?}", dx, dy);
 
                                     let left_mouse_pressed = ev.button() == 0;
                                     
