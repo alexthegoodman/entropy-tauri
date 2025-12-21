@@ -1,6 +1,7 @@
 use entropy_engine::core::pipeline::ExportPipeline;
 use entropy_engine::core::editor::WindowSize;
 use entropy_engine::helpers::load_project::place_project;
+use entropy_engine::helpers::saved_data::ComponentData;
 use entropy_engine::helpers::timelines::SavedTimelineStateConfig;
 use js_sys::Date;
 use leptos::html::Canvas;
@@ -486,6 +487,43 @@ pub fn ProjectCanvas(
 }
 
 #[component]
+fn ComponentBrowser(
+    pipeline_store: LocalResource<Option<Rc<RefCell<ExportPipeline>>>>,
+    is_initialized: ReadSignal<bool>,
+) -> impl IntoView {
+    view! {
+        <div>
+            <h3>{"Components"}</h3>
+            <ul>
+                {move || {
+                    if is_initialized.get() {
+                        if let Some(pipeline) = pipeline_store.get() {
+                            if let Some(pipeline_arc) = pipeline.as_ref() {
+                                let pipeline_guard = pipeline_arc.borrow();
+                                if let Some(editor) = pipeline_guard.export_editor.as_ref() {
+                                    if let Some(saved_state) = editor.saved_state.as_ref() {
+                                        if let Some(level) = saved_state.levels.as_ref().and_then(|l| l.get(0)) {
+                                            if let Some(components) = level.components.as_ref() {
+                                                return components.into_iter().map(|c| {
+                                                    let name = c.generic_properties.name.clone();
+                                                    let id = c.id.clone();
+                                                    view! { <li>{name} <small>({id})</small></li> }
+                                                }).collect_view().into_view().into_any();
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    view! {<li></li>}.into_view().into_any()
+                }}
+            </ul>
+        </div>
+    }
+}
+
+#[component]
 pub fn App() -> impl IntoView {
     let (show_chat, set_show_chat) = signal(false);
     let (selected_project, set_selected_project) = signal::<Option<ProjectInfo>>(None);
@@ -775,6 +813,10 @@ pub fn App() -> impl IntoView {
                         pipeline_store={pipeline_store}
                         is_initialized={is_initialized}
                         set_is_initialized={set_is_initialized} 
+                    />
+                    <ComponentBrowser
+                        pipeline_store={pipeline_store}
+                        is_initialized={is_initialized}
                     />
                 </div>
             </section>
